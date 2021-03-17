@@ -68,13 +68,22 @@ then
             foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/yPlus | \
                 sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > yp.$$
 
-            echo "# ccx tau_xx tau_yy tau_zz" > tauw_${model}_${yp}.dat
-            paste -d ' ' Cx.$$ tau.$$ >> tauw_${model}_${yp}.dat
-            echo "# ccx y+" > yplus_${model}_${yp}.dat
-            paste -d ' ' Cx.$$ yp.$$ >> yplus_${model}_${yp}.dat
+            # Saving to csv file instead of dat file (and delete '#' in front of ccx)
+            echo "ccx tau_xx tau_yy tau_zz" > tauw_${model}_${yp}.csv
+            paste -d ' ' Cx.$$ tau.$$ >> tauw_${model}_${yp}.csv
+            echo "ccx y+" > yplus_${model}_${yp}.csv
+            paste -d ' ' Cx.$$ yp.$$ >> yplus_${model}_${yp}.csv
             \rm -f Cx.$$ tau.$$ yp.$$
 
-            ./plot $UInf $nuInf $model $yp
+            # Setting global variables to transfer to python
+            export UInf
+            export nuInf
+            export model
+            export yp
+            # Executing python code
+            python PlotCf.py
+            # Using GNU Plot
+            #./plot $UInf $nuInf $model $yp
 
             # Optionally store the results
             #mv $timeDir ${model}_${yp}.${timeDir}

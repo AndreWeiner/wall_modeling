@@ -1,4 +1,4 @@
-#!/bin/sh
+#!/bin/bash
 cd "${0%/*}" || exit                                # Run from this directory
 . ${WM_PROJECT_DIR:?}/bin/tools/CleanFunctions      # Tutorial clean functions
 #------------------------------------------------------------------------------
@@ -6,6 +6,6 @@ cd "${0%/*}" || exit                                # Run from this directory
 cleanCase0
 
 rm -rf postProcessing-*
-rm -f *.dat *.png constant/turbulenceProperties
+rm -f *.csv *.pdf constant/turbulenceProperties
 
 #------------------------------------------------------------------------------
