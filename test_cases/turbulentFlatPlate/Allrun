@@ -54,6 +54,10 @@ then
 
             runApplication -s ${model}_${yp} simpleFoam
 
+            # Changing solverInfo.dat to solverInfo.csv
+            sed 's/#//g' postProcessing/solverInfo/0/solverInfo.dat > postProcessing/solverInfo/0/solverInfo.csv
+            cp postProcessing/solverInfo/0/solverInfo.csv solverInfo_${model}_${yp}.csv
+
             UInf=$(foamDictionary -entry internalField 0/U | sed 's/^.*(\s*\([^ ]*\).*/\1/g')
             nuInf=$(foamDictionary -entry nu constant/transportProperties | sed 's/^.*\s\(.*\);/\1/g')
 
@@ -82,6 +86,7 @@ then
             export yp
             # Executing python code
             python PlotCf.py
+            python PlotResiduals.py
             # Using GNU Plot
             #./plot $UInf $nuInf $model $yp
 

@@ -61,6 +61,15 @@ functions
         patches         (fixedWall);
         writeControl    writeTime;
     }
+    // Add solverInfo to calculate residuals
+    solverInfo
+    {
+        type            solverInfo;
+        libs            ("libutilityFunctionObjects.so");
+        fields          (U p);
+        writeResidualFields no;
+        writeControl    writeTime;
+    }
     #includeFunc "writeCellCentres"
     #includeFunc "wallShearStress"
 }
