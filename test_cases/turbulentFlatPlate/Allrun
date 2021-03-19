@@ -38,6 +38,13 @@ then
 
     \cp constant/turbulenceProperties.orig constant/turbulenceProperties
 
+    # Export residual array to python
+    for k in "${res_value[@]}"
+    do
+        res_list+=,$k
+    done
+    export res_list
+
     for model in $models
     do
         echo "Processing model: $model"
@@ -72,9 +79,11 @@ then
 
                 runApplication -s ${model}_${yp}_${res} simpleFoam
             
-                # Changing solverInfo.dat to solverInfo.csv
+                # Change solverInfo.dat to solverInfo.csv
                 sed 's/#//g' postProcessing/solverInfo/0/solverInfo.dat > postProcessing/solverInfo/0/solverInfo.csv
                 cp postProcessing/solverInfo/0/solverInfo.csv yplus_${yp}/solverInfo_${model}_${yp}_${res}.csv
+                # Change folder name to preserve each case data
+                mv postProcessing postProcessing-${model}_${yp}_${res}                
 
                 UInf=$(foamDictionary -entry internalField 0/U | sed 's/^.*(\s*\([^ ]*\).*/\1/g')
                 nuInf=$(foamDictionary -entry nu constant/transportProperties | sed 's/^.*\s\(.*\);/\1/g')
@@ -90,7 +99,7 @@ then
                 foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/yPlus | \
                     sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > yp.$$
             
-                # Saving to csv file instead of dat file (and delete '#' in front of ccx)                
+                # Save to csv file instead of dat file (and delete '#' in front of ccx)                
                 echo "ccx tau_xx tau_yy tau_zz" > yplus_${yp}/tauw_${model}_${yp}_${res}.csv
                 paste -d ' ' Cx.$$ tau.$$ >> yplus_${yp}/tauw_${model}_${yp}_${res}.csv
                 echo "ccx y+" > yplus_${yp}/yplus_${model}_${yp}_${res}.csv
@@ -104,12 +113,7 @@ then
             export nuInf
             export model
             export yp
-            # Export residual array to python
-            for k in "${res_value[@]}"
-            do
-                res_list+=,$k
-            done
-            export res_list
+            
             # Executing python code
             python PlotCf.py
             python PlotResiduals.py
@@ -119,7 +123,8 @@ then
             # Optionally store the results
             #mv $timeDir ${model}_${yp}.${timeDir}
         done
-        mv postProcessing postProcessing-${model}
+        # The name of this folder already changed, and thus it is not needed.
+        #mv postProcessing postProcessing-${model}
     done
 fi
 

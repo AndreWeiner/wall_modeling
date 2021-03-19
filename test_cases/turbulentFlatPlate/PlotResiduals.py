@@ -58,7 +58,7 @@ solverInfo_data[0].head()
 
 # ## **3. Import of Initial Residual for *'U<sub>x</sub>'*, *'U<sub>y</sub>'*, and *'p'***
 # 
-# In \*.*csv* file of *'solverInfo'*, all the residuals for *'U<sub>x</sub>'*, *'U<sub>y</sub>'*, and *'p'* are already calculated. Therefore, these values need to be imported to python. All the values except time should be lists as they are calculated for various **SIMPLE** residual limits.
+# In \*.*csv* file of *'solverInfo'*, all the residuals for *'U<sub>x</sub>'*, *'U<sub>y</sub>'*, and *'p'* are already calculated. Therefore, these values need to be imported to python. All the values should be lists as they are calculated for various **SIMPLE** residual limits.
 
 # In[4]:
 
@@ -66,7 +66,7 @@ solverInfo_data[0].head()
 Ux_init_res = [solverInfo_data[k]['Ux_initial'] for k in range(len(res_list))]
 Uy_init_res = [solverInfo_data[l]['Uy_initial'] for l in range(len(res_list))]
 p_init_res = [solverInfo_data[m]['p_initial'] for m in range(len(res_list))]
-t = solverInfo_data[0]['Time']
+t = [solverInfo_data[p]['Time'] for p in range(len(res_list))]
 
 
 # ## **4. Plot**
@@ -83,9 +83,9 @@ for n in range(len(res_list)):
     plt.title("Initial Residual Convergence for SIMPLE Residual Limit {}".format(res_list[n]))
     ax.set_xlabel("Time")
     ax.set_ylabel("Initial Residual (log scale)")
-    ax.plot(t, Ux_init_res[n], color = 'b', label = "$U_x$ Res. Lim. = {}".format(res_list[n]))
-    ax.plot(t, Uy_init_res[n], color = 'r', label = "$U_y$ Res. Lim. = {}".format(res_list[n]))
-    ax.plot(t, p_init_res[n], color = 'g', label = "$p$ Res. Lim. = {}".format(res_list[n]))
+    ax.plot(t[n], Ux_init_res[n], color = 'b', label = "$U_x$ Res. Lim. = {}".format(res_list[n]))
+    ax.plot(t[n], Uy_init_res[n], color = 'r', label = "$U_y$ Res. Lim. = {}".format(res_list[n]))
+    ax.plot(t[n], p_init_res[n], color = 'g', label = "$p$ Res. Lim. = {}".format(res_list[n]))
     ax.legend()
     plt.savefig("yplus_{}/solverInfo_{}_{}_{}.pdf".format(str(yp), model, str(yp), res_list[n]), bbox_inches="tight")
 
