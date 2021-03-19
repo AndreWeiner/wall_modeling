@@ -29,6 +29,13 @@ then
     #grading_vs_yp[50]=90
     #grading_vs_yp[100]=35
 
+    # Declare res_value array
+    declare -A res_value
+    res_value[1e-3]=1e-3
+    res_value[1e-4]=1e-4
+    res_value[1e-5]=1e-5
+    res_value[1e-6]=1e-6
+
     \cp constant/turbulenceProperties.orig constant/turbulenceProperties
 
     for model in $models
@@ -43,47 +50,66 @@ then
             yp=$i
             grading=${grading_vs_yp[$yp]}
 
+            # Make directory for file separation
+            mkdir yplus_${yp}
+
             echo "Mesh: y+ $yp"
 
             \rm -rf 0 [1-9]*
             \cp -rf 0.${model} 0
 
             sed "s/GRADING/$grading/g" system/blockMeshDict.template > system/blockMeshDict
+            # Add additional loop for each residual limit value
+            for j in "${!res_value[@]}"
+            do
+                # Add variable for residual limit value
+                res=$j
+                echo "Residual control: $res"
+                # SIMPLE residual control
+                sed "s/RESIDUAL/$res/g" system/fvSolution.template > system/fvSolution
+                
+                runApplication -s ${model}_${yp}_${res} blockMesh
 
-            runApplication -s ${model}_${yp} blockMesh
+                runApplication -s ${model}_${yp}_${res} simpleFoam
+            
+                # Changing solverInfo.dat to solverInfo.csv
+                sed 's/#//g' postProcessing/solverInfo/0/solverInfo.dat > postProcessing/solverInfo/0/solverInfo.csv
+                cp postProcessing/solverInfo/0/solverInfo.csv yplus_${yp}/solverInfo_${model}_${yp}_${res}.csv
 
-            runApplication -s ${model}_${yp} simpleFoam
+                UInf=$(foamDictionary -entry internalField 0/U | sed 's/^.*(\s*\([^ ]*\).*/\1/g')
+                nuInf=$(foamDictionary -entry nu constant/transportProperties | sed 's/^.*\s\(.*\);/\1/g')
 
-            # Changing solverInfo.dat to solverInfo.csv
-            sed 's/#//g' postProcessing/solverInfo/0/solverInfo.dat > postProcessing/solverInfo/0/solverInfo.csv
-            cp postProcessing/solverInfo/0/solverInfo.csv solverInfo_${model}_${yp}.csv
+                timeDir=$(foamListTimes -latestTime)
 
-            UInf=$(foamDictionary -entry internalField 0/U | sed 's/^.*(\s*\([^ ]*\).*/\1/g')
-            nuInf=$(foamDictionary -entry nu constant/transportProperties | sed 's/^.*\s\(.*\);/\1/g')
+                echo "UInf = $UInf"
 
-            timeDir=$(foamListTimes -latestTime)
-
-            echo "UInf = $UInf"
-
-            foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/Cx | \
-                sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > Cx.$$
-            foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/wallShearStress | \
-                sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > tau.$$
-            foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/yPlus | \
-                sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > yp.$$
-
-            # Saving to csv file instead of dat file (and delete '#' in front of ccx)
-            echo "ccx tau_xx tau_yy tau_zz" > tauw_${model}_${yp}.csv
-            paste -d ' ' Cx.$$ tau.$$ >> tauw_${model}_${yp}.csv
-            echo "ccx y+" > yplus_${model}_${yp}.csv
-            paste -d ' ' Cx.$$ yp.$$ >> yplus_${model}_${yp}.csv
-            \rm -f Cx.$$ tau.$$ yp.$$
-
+                foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/Cx | \
+                    sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > Cx.$$
+                foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/wallShearStress | \
+                    sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > tau.$$
+                foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/yPlus | \
+                    sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > yp.$$
+            
+                # Saving to csv file instead of dat file (and delete '#' in front of ccx)                
+                echo "ccx tau_xx tau_yy tau_zz" > yplus_${yp}/tauw_${model}_${yp}_${res}.csv
+                paste -d ' ' Cx.$$ tau.$$ >> yplus_${yp}/tauw_${model}_${yp}_${res}.csv
+                echo "ccx y+" > yplus_${yp}/yplus_${model}_${yp}_${res}.csv
+                paste -d ' ' Cx.$$ yp.$$ >> yplus_${yp}/yplus_${model}_${yp}_${res}.csv
+                \rm -f Cx.$$ tau.$$ yp.$$                      
+                
+            done
+            
             # Setting global variables to transfer to python
             export UInf
             export nuInf
             export model
             export yp
+            # Export residual array to python
+            for k in "${res_value[@]}"
+            do
+                res_list+=,$k
+            done
+            export res_list
             # Executing python code
             python PlotCf.py
             python PlotResiduals.py
