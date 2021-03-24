@@ -61,6 +61,12 @@ boundaryField
     {
         type            empty;
     }
+
+    processor
+    {
+    	type  processor;
+    	value $internalField;
+    }
 }
 
 // ************************************************************************* //

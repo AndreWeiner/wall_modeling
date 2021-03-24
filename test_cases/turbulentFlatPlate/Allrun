@@ -3,6 +3,9 @@ cd "${0%/*}" || exit                                # Run from this directory
 . ${WM_PROJECT_DIR:?}/bin/tools/RunFunctions        # Tutorial run functions
 #------------------------------------------------------------------------------
 
+# Define StartTime
+StartTime=$(date +%s)
+
 if notTest "$@"
 then
     models="
@@ -36,14 +39,10 @@ then
     res_value[1e-5]=1e-5
     res_value[1e-6]=1e-6
 
-    \cp constant/turbulenceProperties.orig constant/turbulenceProperties
+    # Number of processors for parallel computing (4 processors)
+    proc_num=$(seq 0 3)
 
-    # Export residual array to python
-    for k in "${res_value[@]}"
-    do
-        res_list+=,$k
-    done
-    export res_list
+    \cp constant/turbulenceProperties.orig constant/turbulenceProperties
 
     for model in $models
     do
@@ -62,13 +61,17 @@ then
 
             echo "Mesh: y+ $yp"
 
-            \rm -rf 0 [1-9]*
-            \cp -rf 0.${model} 0
+            # Remove 0.orig folder and copy again from 0.model
+            \rm -rf 0.orig
+            \cp -rf 0.${model} 0.orig
 
             sed "s/GRADING/$grading/g" system/blockMeshDict.template > system/blockMeshDict
             # Add additional loop for each residual limit value
             for j in "${!res_value[@]}"
             do
+                # Remove all processor folders to decompose the section for every case
+                rm -rf processor*
+                
                 # Add variable for residual limit value
                 res=$j
                 echo "Residual control: $res"
@@ -76,8 +79,15 @@ then
                 sed "s/RESIDUAL/$res/g" system/fvSolution.template > system/fvSolution
                 
                 runApplication -s ${model}_${yp}_${res} blockMesh
+                # Decompose mesh for every case
+                runApplication -s ${model}_${yp}_${res} decomposePar
+                # Distribute 0.orig directory to processor folders
+                restore0Dir -processor              
+                # Dummy file for post-processing
+                touch post.foam
 
-                runApplication -s ${model}_${yp}_${res} simpleFoam
+                # Run simpleFoam solver with parallel computing
+                runParallel -s ${model}_${yp}_${res} simpleFoam -parallel
             
                 # Change solverInfo.dat to solverInfo.csv
                 sed 's/#//g' postProcessing/solverInfo/0/solverInfo.dat > postProcessing/solverInfo/0/solverInfo.csv
@@ -85,38 +95,34 @@ then
                 # Change folder name to preserve each case data
                 mv postProcessing postProcessing-${model}_${yp}_${res}                
 
-                UInf=$(foamDictionary -entry internalField 0/U | sed 's/^.*(\s*\([^ ]*\).*/\1/g')
+                UInf=$(foamDictionary -entry internalField 0.orig/U | sed 's/^.*(\s*\([^ ]*\).*/\1/g')
                 nuInf=$(foamDictionary -entry nu constant/transportProperties | sed 's/^.*\s\(.*\);/\1/g')
-
-                timeDir=$(foamListTimes -latestTime)
 
                 echo "UInf = $UInf"
 
-                foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/Cx | \
-                    sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > Cx.$$
-                foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/wallShearStress | \
-                    sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > tau.$$
-                foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/yPlus | \
-                    sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > yp.$$
-            
-                # Save to csv file instead of dat file (and delete '#' in front of ccx)                
+                # Echo only once to avoid overwrite and delete '#' in front of ccx
                 echo "ccx tau_xx tau_yy tau_zz" > yplus_${yp}/tauw_${model}_${yp}_${res}.csv
-                paste -d ' ' Cx.$$ tau.$$ >> yplus_${yp}/tauw_${model}_${yp}_${res}.csv
                 echo "ccx y+" > yplus_${yp}/yplus_${model}_${yp}_${res}.csv
-                paste -d ' ' Cx.$$ yp.$$ >> yplus_${yp}/yplus_${model}_${yp}_${res}.csv
-                \rm -f Cx.$$ tau.$$ yp.$$                      
+                # Use an additional loop for gathering all the results from each processor
+                for k in $proc_num
+                do
+                    timeDir=$(foamListTimes -processor -latestTime)
+
+                    foamDictionary -entry boundaryField.bottomWall.value -value processor$k/$timeDir/Cx | \
+                        sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > Cx.$$
+                    foamDictionary -entry boundaryField.bottomWall.value -value processor$k/$timeDir/wallShearStress | \
+                        sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > tau.$$
+                    foamDictionary -entry boundaryField.bottomWall.value -value processor$k/$timeDir/yPlus | \
+                        sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > yp.$$
+            
+                    # Save to csv file instead of dat file
+                    paste -d ' ' Cx.$$ tau.$$ >> yplus_${yp}/tauw_${model}_${yp}_${res}.csv                
+                    paste -d ' ' Cx.$$ yp.$$ >> yplus_${yp}/yplus_${model}_${yp}_${res}.csv
+                    \rm -f Cx.$$ tau.$$ yp.$$                    
+                done
                 
             done
             
-            # Setting global variables to transfer to python
-            export UInf
-            export nuInf
-            export model
-            export yp
-            
-            # Executing python code
-            python PlotCf.py
-            python PlotResiduals.py
             # Using GNU Plot
             #./plot $UInf $nuInf $model $yp
 
@@ -128,4 +134,7 @@ then
     done
 fi
 
+# Define EndTime and print elapsed time for the task
+EndTime=$(date +%s)
+echo "Total Elapsed Time : $(($EndTime - $StartTime)) seconds"
 # -----------------------------------------------------------------------------

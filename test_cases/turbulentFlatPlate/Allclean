@@ -5,7 +5,8 @@ cd "${0%/*}" || exit                                # Run from this directory
 
 cleanCase0
 
-rm -rf postProcessing-* yplus*
+# Clear folders including 0.orig that is not included in CleanFunctions
+rm -rf postProcessing-* yplus* 0.orig
 rm -f *.csv *.pdf constant/turbulenceProperties
 
 #------------------------------------------------------------------------------
