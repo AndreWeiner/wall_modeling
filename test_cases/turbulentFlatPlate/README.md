@@ -15,6 +15,54 @@ For further information please visit:
 ```    
     https://www.openfoam.com/documentation/guides/latest/doc/verification-validation-turbulent-flat-plate-zpg.html
 ```
+
+This test case is a basic setting for turbulence models due to its simple geometry. By investigating the case, we are able to calculate and plot skin friction '*C<sub>f</sub>*' at the wall of the plate for each y+ which is compared to the analytical solution based on the empirical data by Weighardt. y+ values are strongly related to the size of meshes. Therefore, we can show how the skin friction changes depending on how the mesh is resolved. It is generally expected that the more the mesh is resolved, then the more accurate the result will be. There are two approaches to deal with the behavior of the fluid at the wall as follows.
+1. With Wall Functions
+2. Without Wall Functions
+
+Here, the first case will be discussed.
+## **2D Turbulent Flat Plate Case with Wall Functions**
+When we use the case from tutorials in **OpenFOAM**, the related wall functions for '*k*', '*nut*', and '*omega*' are already set in '*bottomWall*' boundary. Each variable has each wall function as follows.
+- '*k*'\
+'*k*' is called '*turbulence kinetic energy*' that means the kinetic energy per unit mass of the turbulent fluctuations $u'$. The equation is given below.\
+As seen in the below box, '*kqRWallFunction*' is used in '*bottomWall*' boundary. '*kqRWallFunction*' is employed for the situation of zero gradient conditions which correspond to Neumann boundary conditions, whereas '*kLowReWallFunction*' gives the boundary conditions of each position of y+.
+$$
+k:=\frac{1}{2}(\overline{u_x^{\prime 2}} + \overline{u_y^{\prime 2}} + \overline{u_z^{\prime 2}})
+$$
+```
+bottomWall
+{
+    type            kqRWallFunction;
+    value           $internalField;
+}
+```
+- '*nut*' ($\nu_{t}$)\
+'$\nu_{t}$' is called '*turbulence Eddy viscosity*' that is used to solve the closure problem. By using this term, the Reynolds stress can be expressed similar to the typical stress-viscosity relation.
+Here, '*nutUSpaldingWallFunction*' is used. This function has complicated terms in order to catch the real behavior in the viscous layer as well as the log-law layer. Therefore, it can be used for all area regardless of y+.
+```
+bottomWall
+{
+    type            nutUSpaldingWallFunction;
+    value           $internalField;
+}
+```
+- '*omega*' ($\omega$)\
+'$\omega$' is called '*specific turbulence dissipation*' that is the rate at which turbulence kinetic energy '*k*' is converted into thermal internal energy per unit volume and time. The equation is given below where '$\epsilon$' means '*turbulence dissipation*' and $C_{\mu}=0.09$ is a model constant.\
+For '$\omega$', '*omegaWallFunction*' is used. This is the only function for '*omega*', and it can be used for all of the regions (viscous and log-law layers) if the blended option is set to '*true*'.
+$$
+\omega:=\frac{\epsilon}{kC_{\mu}}
+$$
+```
+bottomWall
+{
+    type            omegaWallFunction;
+    blended         true;
+    value           $internalField;
+}
+```
+
+The result plots are shown in '*PlotCf.ipynb*'. For y+ = 5 and 10, the calculated skin friction values best fit the empirical data. The values also fit well for y+ = 0.05, whereas the values slightly differ from the empirical data for y+ = 1 and 2. For y+ = 30, 50, and 100, the values well fit the empirical data at the back part of the plate ($Re_{x}>0.2\cdot 10^7$), while they totally cannot catch the behavior of the data at the front part ($Re_{x}<0.2\cdot 10^7$). It implies that the more accurate wall boundary condition can be applied by wall functions than the condition without wall functions. However, there are still some discrepancies between the calculation and the empirical data. A modification of wall functions is needed to reduce these discrepancies.
+
 ## **'*Allrun*' Script**
 
 Having mentioned above, the '*Allrun*' script executes the simulation for a various range of y+. Furthermore, a number of code lines are added for several residual limits of **SIMPLE** algorithm and parallel computing. The important parts of the code are explained as follows. Here, '*kOmegaSST*' is used for the simulation. In addition, a list for mesh grading is declared in order to let all the y+ in first cells from boundary layers be the corresponding y+ values in the list.
@@ -165,7 +213,4 @@ functions
 2. '*yplus*' is used to save y+ values for designated patches mentioned in the option.
 3. '*solverInfo*' is used to save various information for designated fields such as velocity or pressure mentioned in the option. Information of residuals is also saved to the file, and thus we can extract the information from this file.
 4. '*writeCellCentres*' saves coordinates of cell centers not to the '*postProcess*' folder, but to each time step folder.
-5. '*wallShearStress*' saves maxiumum and minimum wall shear stress values in the file.
-
-## **Purpose of the Test Case**
-To be updated.
+5. '*wallShearStress*' saves maximum and minimum wall shear stress values in the file.
