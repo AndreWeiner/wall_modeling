@@ -20,15 +20,11 @@ This test case is a basic setting for turbulence models due to its simple geomet
 1. With Wall Functions
 2. Without Wall Functions
 
-Here, the first case will be discussed.
+Here, the first case will be explained.
 ## **2D Turbulent Flat Plate Case with Wall Functions**
 When we use the case from tutorials in **OpenFOAM**, the related wall functions for '*k*', '*nut*', and '*omega*' are already set in '*bottomWall*' boundary. Each variable has each wall function as follows.
 - '*k*'\
-'*k*' is called '*turbulence kinetic energy*' that means the kinetic energy per unit mass of the turbulent fluctuations $u'$. The equation is given below.\
-As seen in the below box, '*kqRWallFunction*' is used in '*bottomWall*' boundary. '*kqRWallFunction*' is employed for the situation of zero gradient conditions which correspond to Neumann boundary conditions, whereas '*kLowReWallFunction*' gives the boundary conditions of each position of y+.
-$$
-k:=\frac{1}{2}(\overline{u_x^{\prime 2}} + \overline{u_y^{\prime 2}} + \overline{u_z^{\prime 2}})
-$$
+'*k*' is called '*turbulence kinetic energy*' that means the kinetic energy per unit mass of the turbulent fluctuations *u'*. As seen below, '*kqRWallFunction*' is used in '*bottomWall*' boundary. '*kqRWallFunction*' is employed for the situation of zero gradient conditions which correspond to Neumann boundary conditions, whereas '*kLowReWallFunction*' gives the boundary conditions of each position of y+.
 ```
 bottomWall
 {
@@ -36,9 +32,8 @@ bottomWall
     value           $internalField;
 }
 ```
-- '*nut*' ($\nu_{t}$)\
-'$\nu_{t}$' is called '*turbulence Eddy viscosity*' that is used to solve the closure problem. By using this term, the Reynolds stress can be expressed similar to the typical stress-viscosity relation.
-Here, '*nutUSpaldingWallFunction*' is used. This function has complicated terms in order to catch the real behavior in the viscous layer as well as the log-law layer. Therefore, it can be used for all area regardless of y+.
+- '*nut*'\
+'*nut*' is called '*turbulence Eddy viscosity*' that is used to solve the closure problem. By using this term, the Reynolds stress can be expressed similar to the typical stress-viscosity relation. Here, '*nutUSpaldingWallFunction*' is used. This function has complicated terms in order to catch the real behavior in the viscous layer as well as the log-law layer. Therefore, it can be used for all area regardless of y+.
 ```
 bottomWall
 {
@@ -46,12 +41,8 @@ bottomWall
     value           $internalField;
 }
 ```
-- '*omega*' ($\omega$)\
-'$\omega$' is called '*specific turbulence dissipation*' that is the rate at which turbulence kinetic energy '*k*' is converted into thermal internal energy per unit volume and time. The equation is given below where '$\epsilon$' means '*turbulence dissipation*' and $C_{\mu}=0.09$ is a model constant.\
-For '$\omega$', '*omegaWallFunction*' is used. This is the only function for '*omega*', and it can be used for all of the regions (viscous and log-law layers) if the blended option is set to '*true*'.
-$$
-\omega:=\frac{\epsilon}{kC_{\mu}}
-$$
+- '*omega*'\
+'*omega*' is called '*specific turbulence dissipation*' that is the rate at which turbulence kinetic energy '*k*' is converted into thermal internal energy per unit volume and time. For '*omega*', '*omegaWallFunction*' is used. This is the only function for '*omega*', and it can be used for all of the regions (viscous and log-law layers) if the blended option is set to '*true*'.
 ```
 bottomWall
 {
@@ -61,7 +52,7 @@ bottomWall
 }
 ```
 
-The result plots are shown in '*PlotCf.ipynb*'. For y+ = 5 and 10, the calculated skin friction values best fit the empirical data. The values also fit well for y+ = 0.05, whereas the values slightly differ from the empirical data for y+ = 1 and 2. For y+ = 30, 50, and 100, the values well fit the empirical data at the back part of the plate ($Re_{x}>0.2\cdot 10^7$), while they totally cannot catch the behavior of the data at the front part ($Re_{x}<0.2\cdot 10^7$). It implies that the more accurate wall boundary condition can be applied by wall functions than the condition without wall functions. However, there are still some discrepancies between the calculation and the empirical data. A modification of wall functions is needed to reduce these discrepancies.
+The result plots are shown in '*PlotCf.ipynb*'. For y+ = 5 and 10, the calculated skin friction values best fit the empirical data. The values also fit well for y+ = 0.05, whereas the values slightly differ from the empirical data for y+ = 1 and 2. For y+ = 30, 50, and 100, the values well fit the empirical data at the back part of the plate (Re<sub>x</sub> > 0.2x10e7), while they definitely cannot catch the behavior of the data at the front part (Re<sub>x</sub> < 0.2x10e7). It implies that the more accurate wall boundary condition can be applied by wall functions than the condition without wall functions. However, there are still some discrepancies between the calculation and the empirical data. A modification of wall functions is needed to reduce these discrepancies.
 
 ## **'*Allrun*' Script**
 

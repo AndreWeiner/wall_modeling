@@ -15,6 +15,25 @@ For further information please visit:
 ```    
     https://www.openfoam.com/documentation/guides/latest/doc/verification-validation-turbulent-flat-plate-zpg.html
 ```
+
+This test case is a basic setting for turbulence models due to its simple geometry. By investigating the case, we are able to calculate and plot skin friction '*C<sub>f</sub>*' at the wall of the plate for each y+ which is compared to the analytical solution based on the empirical data by Weighardt. y+ values are strongly related to the size of meshes. Therefore, we can show how the skin friction changes depending on how the mesh is resolved. It is generally expected that the more the mesh is resolved, then the more accurate the result will be. There are two approaches to deal with the behavior of the fluid at the wall as follows.
+1. With Wall Functions
+2. Without Wall Functions
+
+Here, the second case will be explained.
+## **2D Turbulent Flat Plate Case without Wall Functions**
+When we use the case from tutorials in **OpenFOAM**, the related wall functions for '*k*', '*nut*', and '*omega*' are already set in '*bottomWall*' boundary. Hence, we must change them to a fixed value of 0.0 for '*k*' and '*nut*'. Moreover, '*omega*' should be changed to a certain fixed value instead of its wall function because an error occurs when we use a wall function only for '*omega*'. In order to insert the fixed value, the equation of '*omega*' at the wall should be introduced as follows,
+```
+omega_wall = 10*(6*nu_inf)/(beta_1*(Delta_y_wall^2))
+```
+where *beta_1 = 0.075*, '*nu_inf*' is '*nu*' value in '*transportProperties*' dictionary, and '*Delta_y_wall*' is the distance from the bottom wall to the first cell center. However, '*Delta_y_wall*' cannot be retrieved from '*bottomWall*' boundary since the boundary automatically set the y-coordinates of all the cell center adjacent to the wall to 0. When we type '*foamDictionary -entry boundaryField.bottomWall.value -value processor\$k/\$timeDir/Cy*' in a terminal (where \$k is the processor number and \$timeDir is the latest time for the simulation), the message given below appears.
+```
+uniform 0
+```
+Thus, another approach is to be employed here. The control volume of this case is just a rectangular shape, so that '*inlet*' or '*outlet*' boundary information can be used instead of '*bottomWall*' boundary information. In this case, the lowest y-coordinate of '*inlet*' or '*outlet*' is the same coordinate of the first cell center adjacent to the wall.
+
+The result plots are shown in '*PlotCf.ipynb*'. For y+ = 0.05, 1, 2 and 5, the calculated skin friction values are relatively similar to the analytical solution. From y+ = 10, the course of the graph starts to get off the track and oscillate. Moreover, the graph for y+ >= 30 totally get off the track from the analytical solution. This occurs because the related values at the cell centers adjacent to the wall are not able to be calculated properly if the mesh is too coarse. It means that the first cell center is too far from the wall and it cannot catch the wall behavior appropriately. Therefore, wall functions are used for coarse mesh.
+
 ## **'*Allrun*' Script**
 
 Having mentioned above, the '*Allrun*' script executes the simulation for a various range of y+. Furthermore, a number of code lines are added for several residual limits of **SIMPLE** algorithm and parallel computing. The important parts of the code are explained as follows. Here, '*kOmegaSST*' is used for the simulation. In addition, a list for mesh grading is declared in order to let all the y+ in first cells from boundary layers be the corresponding y+ values in the list.
@@ -35,6 +54,19 @@ grading_vs_yp[50]=15
 grading_vs_yp[100]=5
 ```
 
+This part differs from the flat plate case with wall functions. When we use a fixed value (0.0) for '*k*' and '*nut*' instead of wall functions, '*omega*' must also be a fixed value in order to avoid any errors. For each y+, different '*omega*' values are calculated as follows.
+```
+declare -A omega_wall
+omega_wall[0.05]=143845461846.68436 # delta_y_wall = 2.77838e-7
+omega_wall[1]=545500527.1759933 # delta_y_wall = 4.51172e-6
+omega_wall[2]=127730189.02111071 # delta_y_wall = 9.3238e-6
+omega_wall[5]=18268574.887755036 # delta_y_wall = 2.4654e-5
+omega_wall[10]=4659592.690268157 # delta_y_wall = 4.88164e-5
+omega_wall[30]=480666.3376110513 # delta_y_wall = 1.51991e-4
+omega_wall[50]=176457.7977119062 # delta_y_wall = 2.50853e-4
+omega_wall[100]=40709.984301175675 # delta_y_wall = 5.22263e-4
+```
+
 A loop is executed for various models, but there is only one model ('*kOmegaSST*') that will be investigated. Subsequently, the code gives the model information to the dictionary file '*turbulenceProperties*'.
 
 ```
@@ -46,12 +78,14 @@ do
         constant/turbulenceProperties > /dev/null
 ```
 
-This loop is for the various y+. Since there are several y+ values to investigate, a separation of data by making each directory corresponding y+ is needed. Afterward, the initial condition is to be copied from the original '*0.model*' (e.g. '*0.kOmegaSST*' or '*0.kEpsilon*') folder when investigating a different y+. Subsequently, the respective grading values are inserted to the '*blockMesh*' file.
+This loop is for the various y+. Since there are several y+ values to investigate, a separation of data by making each directory corresponding y+ is needed. Afterward, the initial condition is to be copied from the original '*0.model*' (e.g. '*0.kOmegaSST*' or '*0.kEpsilon*') folder when investigating a different y+. Subsequently, the respective grading values are inserted to the '*blockMesh*' file. Then, the fixed '*omega*' value for each loop is to be inserted to '*omega*' dictionary.
 ```
     for i in "${!grading_vs_yp[@]}"
     do
         yp=$i
         grading=${grading_vs_yp[$yp]}
+        # Fixed value of omega
+        omega=${omega_wall[$yp]}
 
         # Make directory for file separation
         mkdir yplus_${yp}
@@ -63,6 +97,8 @@ This loop is for the various y+. Since there are several y+ values to investigat
         \cp -rf 0.${model} 0.orig
 
         sed "s/GRADING/$grading/g" system/blockMeshDict.template > system/blockMeshDict
+        # Add the fixed omega value for each mesh generation
+        sed "s/OMEGAWALL/$omega/g" 0.orig/omega.template > 0.orig/omega
 ```
 
 A loop is needed for various residual limits as follows. In the loop, the simulation is actually executed after all the condition is set. When parallel computing codes are used, a number of processor folders are created for each simulations. Hence, these processor folders should be deleted when every simulation starts to execute. Then, the residual limit is added to the '*fvSolution*' dictionary for each step of the loop.
@@ -109,9 +145,10 @@ These lines of code are needed for post-processing. First of all, all the inform
             # Echo only once to avoid overwrite and delete '#' in front of ccx
             echo "ccx tau_xx tau_yy tau_zz" > yplus_${yp}/tauw_${model}_${yp}_${res}.csv
             echo "ccx y+" > yplus_${yp}/yplus_${model}_${yp}_${res}.csv
+            echo "ccy" > yplus_${yp}/Cy_${model}_${yp}_${res}.csv
 ```
 
-This is the final loop in the '*Allrun*' script which iterates over the processors we use. For each processor folder, the related values (e.g. Cx, tau, y+) from the boundary '*bottomWall*' are to be saved. Finally, the values of Cx, tau, and y+ are saved to separate csv files in order to calculate skin friction '*C<sub>f</sub>*'.
+This is the final loop in the '*Allrun*' script which iterates over the processors we use. For each processor folder, the related values (e.g. Cx, tau, y+) from the boundary '*bottomWall*' are to be saved. Furthermore, we need to add cell center values of y-coordinate to calculate '*omega*' at the wall (first cell center). However, when we try to use the values from '*bottomWall*' boundary, we observe that the values are constantly all 0.0. Instead, the inlet or outlet y-coordinates are used for this case. Finally, the values of Cx, tau, *Cy*, and y+ are saved to separate csv files in order to calculate skin friction '*C<sub>f</sub>*'.
 ```
             # Use an additional loop for gathering all the results from each processor
             for k in $proc_num
@@ -124,11 +161,15 @@ This is the final loop in the '*Allrun*' script which iterates over the processo
                     sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > tau.$$
                 foamDictionary -entry boundaryField.bottomWall.value -value processor$k/$timeDir/yPlus | \
                     sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > yp.$$
+                # Add cell center value of y coordinate in inlet patch
+                foamDictionary -entry boundaryField.inlet.value -value processor$k/$timeDir/Cy | \
+                    sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > Cy.$$
             
                 # Save to csv file instead of dat file
                 paste -d ' ' Cx.$$ tau.$$ >> yplus_${yp}/tauw_${model}_${yp}_${res}.csv                
                 paste -d ' ' Cx.$$ yp.$$ >> yplus_${yp}/yplus_${model}_${yp}_${res}.csv
-                \rm -f Cx.$$ tau.$$ yp.$$                    
+                paste -d ' ' Cy.$$ >> yplus_${yp}/Cy_${model}_${yp}_${res}.csv
+                \rm -f Cx.$$ tau.$$ yp.$$ Cy.$$
             done
 ```
 ## **Function Objects in the Turbulent Flat Plate Case**
@@ -165,7 +206,4 @@ functions
 2. '*yplus*' is used to save y+ values for designated patches mentioned in the option.
 3. '*solverInfo*' is used to save various information for designated fields such as velocity or pressure mentioned in the option. Information of residuals is also saved to the file, and thus we can extract the information from this file.
 4. '*writeCellCentres*' saves coordinates of cell centers not to the '*postProcess*' folder, but to each time step folder.
-5. '*wallShearStress*' saves maxiumum and minimum wall shear stress values in the file.
-
-## **Purpose of the Test Case**
-To be updated.
+5. '*wallShearStress*' saves maximum and minimum wall shear stress values in the file.
