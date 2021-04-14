@@ -17,10 +17,19 @@ cd run/turbulentFlatPlate
 ./Allrun
 ```
 
-## Singularity
+## Singularity and SLURM
 
-TODO
-- add singularity container to make results reproducible
+[Singularity]() is a container tool that allows making results reproducible and performing simulations, to a large extent, platform independent. The only remaining dependencies are Singularity itself and Open-MPI (see next section for further comments). To build the image, run:
+
+```
+sudo singularity build of_v2012.sif docker://andreweiner/of_pytorch:of2012-py1.7.1-cpu
+```
+To run a simulation with Singularity, use the dedicated *Allrun.singularity* scripts. TU Braunschweig's HPC uses the SLURM scheduler. The repository contains an annotated example *jobscript*. The script expects the Singularity image in the top level directory of this repository and the simulation folder in *run*. To submit a job, run:
+
+```
+qsub jobscript name_of_simulation
+```
+To show all running jobs of a user, use `squeue -u $USER`. Another helpful command is `quota -s` to check the available disk space.
 
 ## References
 
