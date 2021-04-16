@@ -27,7 +27,7 @@ sudo singularity build of_v2012.sif docker://andreweiner/of_pytorch:of2012-py1.7
 To run a simulation with Singularity, use the dedicated *Allrun.singularity* scripts. TU Braunschweig's HPC uses the SLURM scheduler. The repository contains an annotated example *jobscript*. The script expects the Singularity image in the top level directory of this repository and the simulation folder in *run*. To submit a job, run:
 
 ```
-qsub jobscript name_of_simulation
+sbatch jobscript name_of_simulation
 ```
 To show all running jobs of a user, use `squeue -u $USER`. Another helpful command is `quota -s` to check the available disk space.
 
