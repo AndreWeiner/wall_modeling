@@ -1,0 +1,6 @@
+#!/bin/bash
+
+image="../../of_v2012.sif"
+bashrc="/usr/lib/openfoam/openfoam2012/etc/bashrc"
+
+singularity exec $image bash -c "source $bashrc && ./Allclean"

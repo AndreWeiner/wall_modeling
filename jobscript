@@ -18,4 +18,6 @@ module load mpi/openmpi/4.0.1/cuda_aware_gcc_6.3.0
 ## submit job
 echo "Submitting case $1"
 cd run/$1
-./Allrun.singularity
+image="../../of_v2012.sif"
+bashrc="/usr/lib/openfoam/openfoam2012/etc/bashrc"
+singularity exec $image bash -c "source $bashrc && ./Allrun"
