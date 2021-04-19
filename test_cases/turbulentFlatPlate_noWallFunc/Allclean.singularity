@@ -1,6 +1,10 @@
 #!/bin/bash
 
+# Load singularity module
+module load singularity/3.6.0rc2
+
 image="../../of_v2012.sif"
 bashrc="/usr/lib/openfoam/openfoam2012/etc/bashrc"
 
+# Execute Allclean script with the singularity container
 singularity exec $image bash -c "source $bashrc && ./Allclean"
