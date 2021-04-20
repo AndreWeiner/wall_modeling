@@ -8,9 +8,23 @@ StartTime=$(date +%s)
 
 if notTest "$@"
 then
-    models="
-    kOmegaSST
-    "
+    # Add a menu to choose a turbulence model
+    echo "== Please choose a turbulence model =="
+    echo "-- 1. kOmegaSST ; 2. SpalartAllmaras --"
+    printf "Input a model number : "
+    read model_num    
+
+    if [ ${model_num} -eq "1" ]
+    then
+        models="
+        kOmegaSST
+        "
+    elif [ ${model_num} -eq "2" ]
+    then
+        models="
+        SpalartAllmaras
+        "
+    fi
 
     declare -A grading_vs_yp
     #level 5 gradings
