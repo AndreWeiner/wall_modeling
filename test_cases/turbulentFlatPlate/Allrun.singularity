@@ -7,13 +7,8 @@ cd "${0%/*}" || exit     # Run from this directory
 StartTime=$(date +%s)
 
 if notTest "$@"
-then
-    # Add a menu to choose a turbulence model
-    echo "== Please choose a turbulence model =="
-    echo "-- 1. kOmegaSST ; 2. SpalartAllmaras --"
-    printf "Input a model number : "
-    read model_num    
-
+then    
+    # Receive the model number from "jobscript" file
     if [ ${model_num} -eq "1" ]
     then
         models="
