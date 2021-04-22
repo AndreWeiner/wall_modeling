@@ -16,21 +16,22 @@ FoamFile
 
 dimensions      [0 2 -1 0 0 0 0];
 
-// 3*nu_inf <= nuTilda_inf <= 5*nu_inf. Here, 3*nu_inf is used.
-internalField   uniform 4.164e-5;
+// 3*nu_inf <= nuTilda_inf <= 5*nu_inf. Here, 5*nu_inf is used.
+internalField   uniform 6.94e-5;
 
 boundaryField
 {
+    // freestream BC should be used at the inlet and outlet for the convergence of solutions
     inlet
     {
-        type            fixedValue;
-        value           $internalField;
+        type            freestream;
+        freestreamValue $internalField;
     }
 
     outlet
     {
-        type            fixedValue;
-        value           $internalField;
+        type            freestream;
+        freestreamValue $internalField;
     }
 
     topWall
