@@ -74,4 +74,7 @@ functions
     #includeFunc "wallShearStress"
 }
 
+// Include the custom wall function library
+libs ("libSGSWallFunc.so");
+
 // ************************************************************************* //
