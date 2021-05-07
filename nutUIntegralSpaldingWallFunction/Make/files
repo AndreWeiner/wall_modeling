@@ -1,0 +1,3 @@
+nutUIntegralSpaldingWallFunctionFvPatchScalarField.C
+
+LIB = $(FOAM_USER_LIBBIN)/libnutUIntSpaldingWallFunc

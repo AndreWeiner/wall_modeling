@@ -75,6 +75,6 @@ functions
 }
 
 // Include the custom wall function library
-libs ("libSGSWallFunc.so");
+libs ("libnutUIntSpaldingWallFunc.so");
 
 // ************************************************************************* //

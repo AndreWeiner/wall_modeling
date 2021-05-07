@@ -26,7 +26,7 @@ License
 
 \*---------------------------------------------------------------------------*/
 
-#include "nutSGSWallFunctionFvPatchScalarField.H"
+#include "nutUIntegralSpaldingWallFunctionFvPatchScalarField.H"
 #include "turbulenceModel.H"
 #include "fvPatchFieldMapper.H"
 #include "volFields.H"
@@ -36,7 +36,7 @@ License
 // * * * * * * * * * * * * Protected Member Functions  * * * * * * * * * * * //
 
 Foam::tmp<Foam::scalarField>
-Foam::nutSGSWallFunctionFvPatchScalarField::calcNut() const
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::calcNut() const
 {
     const label patchi = patch().index();
 
@@ -90,7 +90,7 @@ Foam::nutSGSWallFunctionFvPatchScalarField::calcNut() const
 
 
 Foam::tmp<Foam::scalarField>
-Foam::nutSGSWallFunctionFvPatchScalarField::calcUTau
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::calcUTau
 (
     const scalarField& magGradU
 ) const
@@ -101,7 +101,7 @@ Foam::nutSGSWallFunctionFvPatchScalarField::calcUTau
 
 
 Foam::tmp<Foam::scalarField>
-Foam::nutSGSWallFunctionFvPatchScalarField::calcUTau
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::calcUTau
 (
     const scalarField& magGradU,
     const label maxIter,
@@ -190,7 +190,7 @@ Foam::nutSGSWallFunctionFvPatchScalarField::calcUTau
 }
 
 
-void Foam::nutSGSWallFunctionFvPatchScalarField::writeLocalEntries
+void Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::writeLocalEntries
 (
     Ostream& os
 ) const
@@ -204,8 +204,8 @@ void Foam::nutSGSWallFunctionFvPatchScalarField::writeLocalEntries
 
 // * * * * * * * * * * * * * * * * Constructors  * * * * * * * * * * * * * * //
 
-Foam::nutSGSWallFunctionFvPatchScalarField::
-nutSGSWallFunctionFvPatchScalarField
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::
+nutUIntegralSpaldingWallFunctionFvPatchScalarField
 (
     const fvPatch& p,
     const DimensionedField<scalar, volMesh>& iF
@@ -221,10 +221,10 @@ nutSGSWallFunctionFvPatchScalarField
 {}
 
 
-Foam::nutSGSWallFunctionFvPatchScalarField::
-nutSGSWallFunctionFvPatchScalarField
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::
+nutUIntegralSpaldingWallFunctionFvPatchScalarField
 (
-    const nutSGSWallFunctionFvPatchScalarField& ptf,
+    const nutUIntegralSpaldingWallFunctionFvPatchScalarField& ptf,
     const fvPatch& p,
     const DimensionedField<scalar, volMesh>& iF,
     const fvPatchFieldMapper& mapper
@@ -240,8 +240,8 @@ nutSGSWallFunctionFvPatchScalarField
 {}
 
 
-Foam::nutSGSWallFunctionFvPatchScalarField::
-nutSGSWallFunctionFvPatchScalarField
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::
+nutUIntegralSpaldingWallFunctionFvPatchScalarField
 (
     const fvPatch& p,
     const DimensionedField<scalar, volMesh>& iF,
@@ -258,10 +258,10 @@ nutSGSWallFunctionFvPatchScalarField
 {}
 
 
-Foam::nutSGSWallFunctionFvPatchScalarField::
-nutSGSWallFunctionFvPatchScalarField
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::
+nutUIntegralSpaldingWallFunctionFvPatchScalarField
 (
-    const nutSGSWallFunctionFvPatchScalarField& wfpsf
+    const nutUIntegralSpaldingWallFunctionFvPatchScalarField& wfpsf
 )
 :
     nutWallFunctionFvPatchScalarField(wfpsf),
@@ -274,10 +274,10 @@ nutSGSWallFunctionFvPatchScalarField
 {}
 
 
-Foam::nutSGSWallFunctionFvPatchScalarField::
-nutSGSWallFunctionFvPatchScalarField
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::
+nutUIntegralSpaldingWallFunctionFvPatchScalarField
 (
-    const nutSGSWallFunctionFvPatchScalarField& wfpsf,
+    const nutUIntegralSpaldingWallFunctionFvPatchScalarField& wfpsf,
     const DimensionedField<scalar, volMesh>& iF
 )
 :
@@ -293,12 +293,12 @@ nutSGSWallFunctionFvPatchScalarField
 
 // * * * * * * * * * * * * * * * * Destructor  * * * * * * * * * * * * * * * //
 
-Foam::nutSGSWallFunctionFvPatchScalarField::
-~nutSGSWallFunctionFvPatchScalarField()
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::
+~nutUIntegralSpaldingWallFunctionFvPatchScalarField()
 {
     //if (debug)
     //{
-    //    Info<< "nutSGSWallFunctionFvPatchScalarField :"
+    //    Info<< "nutUIntegralSpaldingWallFunctionFvPatchScalarField :"
     //        << " total invocations:"
     //        << returnReduce(invocations_, sumOp<label>())
     //        << " total iterations:"
@@ -315,7 +315,7 @@ Foam::nutSGSWallFunctionFvPatchScalarField::
 // * * * * * * * * * * * * * * * Member Functions  * * * * * * * * * * * * * //
 
 Foam::tmp<Foam::scalarField>
-Foam::nutSGSWallFunctionFvPatchScalarField::yPlus() const
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::yPlus() const
 {
     const label patchi = patch().index();
 
@@ -336,7 +336,7 @@ Foam::nutSGSWallFunctionFvPatchScalarField::yPlus() const
 }
 
 
-void Foam::nutSGSWallFunctionFvPatchScalarField::write
+void Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::write
 (
     Ostream& os
 ) const
@@ -354,7 +354,7 @@ namespace Foam
     makePatchTypeField
     (
         fvPatchScalarField,
-        nutSGSWallFunctionFvPatchScalarField
+        nutUIntegralSpaldingWallFunctionFvPatchScalarField
     );
 }
 

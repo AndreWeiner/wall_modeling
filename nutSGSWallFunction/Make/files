@@ -1,3 +1,0 @@
-nutSGSWallFunctionFvPatchScalarField.C
-
-LIB = $(FOAM_USER_LIBBIN)/libSGSWallFunc

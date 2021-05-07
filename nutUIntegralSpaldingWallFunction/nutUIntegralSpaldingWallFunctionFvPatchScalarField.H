@@ -25,7 +25,7 @@ License
     along with OpenFOAM.  If not, see <http://www.gnu.org/licenses/>.
 
 Class
-    Foam::nutSGSWallFunctionFvPatchScalarField
+    Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField
 
 Group
     grpWallFunctions
@@ -53,7 +53,7 @@ Usage
     <patchName>
     {
         // Mandatory entries (unmodifiable)
-        type            nutSGSWallFunction;
+        type            nutUIntegralSpaldingWallFunction;
 
         // Optional entries (unmodifiable)
         maxIter         10;
@@ -89,12 +89,12 @@ Note
         tolerance   1e-7;
 
 SourceFiles
-    nutSGSWallFunctionFvPatchScalarField.C
+    nutUIntegralSpaldingWallFunctionFvPatchScalarField.C
 
 \*---------------------------------------------------------------------------*/
 
-#ifndef nutSGSWallFunctionFvPatchScalarField_H
-#define nutSGSWallFunctionFvPatchScalarField_H
+#ifndef nutUIntegralSpaldingWallFunctionFvPatchScalarField_H
+#define nutUIntegralSpaldingWallFunctionFvPatchScalarField_H
 
 #include "nutWallFunctionFvPatchScalarField.H"
 
@@ -104,10 +104,10 @@ namespace Foam
 {
 
 /*---------------------------------------------------------------------------*\
-          Class nutSGSWallFunctionFvPatchScalarField Declaration
+          Class nutUIntegralSpaldingWallFunctionFvPatchScalarField Declaration
 \*---------------------------------------------------------------------------*/
 
-class nutSGSWallFunctionFvPatchScalarField
+class nutUIntegralSpaldingWallFunctionFvPatchScalarField
 :
     public nutWallFunctionFvPatchScalarField
 {
@@ -152,20 +152,20 @@ protected:
 public:
 
     //- Runtime type information
-    TypeName("nutSGSWallFunction");
+    TypeName("nutUIntegralSpaldingWallFunction");
 
 
     // Constructors
 
         //- Construct from patch and internal field
-        nutSGSWallFunctionFvPatchScalarField
+        nutUIntegralSpaldingWallFunctionFvPatchScalarField
         (
             const fvPatch&,
             const DimensionedField<scalar, volMesh>&
         );
 
         //- Construct from patch, internal field and dictionary
-        nutSGSWallFunctionFvPatchScalarField
+        nutUIntegralSpaldingWallFunctionFvPatchScalarField
         (
             const fvPatch&,
             const DimensionedField<scalar, volMesh>&,
@@ -173,20 +173,20 @@ public:
         );
 
         //- Construct by mapping given
-        //- nutSGSWallFunctionFvPatchScalarField
+        //- nutUIntegralSpaldingWallFunctionFvPatchScalarField
         //- onto a new patch
-        nutSGSWallFunctionFvPatchScalarField
+        nutUIntegralSpaldingWallFunctionFvPatchScalarField
         (
-            const nutSGSWallFunctionFvPatchScalarField&,
+            const nutUIntegralSpaldingWallFunctionFvPatchScalarField&,
             const fvPatch&,
             const DimensionedField<scalar, volMesh>&,
             const fvPatchFieldMapper&
         );
 
         //- Construct as copy
-        nutSGSWallFunctionFvPatchScalarField
+        nutUIntegralSpaldingWallFunctionFvPatchScalarField
         (
-            const nutSGSWallFunctionFvPatchScalarField&
+            const nutUIntegralSpaldingWallFunctionFvPatchScalarField&
         );
 
         //- Construct and return a clone
@@ -194,14 +194,14 @@ public:
         {
             return tmp<fvPatchScalarField>
             (
-                new nutSGSWallFunctionFvPatchScalarField(*this)
+                new nutUIntegralSpaldingWallFunctionFvPatchScalarField(*this)
             );
         }
 
         //- Construct as copy setting internal field reference
-        nutSGSWallFunctionFvPatchScalarField
+        nutUIntegralSpaldingWallFunctionFvPatchScalarField
         (
-            const nutSGSWallFunctionFvPatchScalarField&,
+            const nutUIntegralSpaldingWallFunctionFvPatchScalarField&,
             const DimensionedField<scalar, volMesh>&
         );
 
@@ -213,13 +213,13 @@ public:
         {
             return tmp<fvPatchScalarField>
             (
-                new nutSGSWallFunctionFvPatchScalarField(*this, iF)
+                new nutUIntegralSpaldingWallFunctionFvPatchScalarField(*this, iF)
             );
         }
 
 
     //- Destructor
-    virtual ~nutSGSWallFunctionFvPatchScalarField();
+    virtual ~nutUIntegralSpaldingWallFunctionFvPatchScalarField();
 
 
     // Member Functions
