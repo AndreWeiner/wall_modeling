@@ -1,0 +1,26 @@
+#!/bin/bash -l
+#SBATCH --partition=standard
+## request 1 node; each node offers up to 20 ranks (cpu cores)
+#SBATCH --nodes=1
+## runtime in hours; after 120h (5 days) our simulations will be stopped
+## by the cluster; no problem is the simulation finishes earlier
+#SBATCH --time=120:00:00
+## name to find your job in the queue
+#SBATCH --job-name=plate
+## number of requested ranks/cores per node
+## total cores = request nodes x ntasks-per-node = 1 x 4 = 4
+#SBATCH --ntasks-per-node=4
+
+## load software libraries
+module load singularity/3.6.0rc2
+module load mpi/openmpi/4.0.1/cuda_aware_gcc_6.3.0
+
+## submit job
+echo "Submitting case $1"
+cd run/$1
+# Add one more variable to choose a turbulence model when executing sbatch
+# Currently, 1. kOmegaSST and 2. SpalartAllmaras are available.
+# In order to choose a model, we should add one more argument of number in the command line.
+# e.g.) "sbatch jobscript_divSchemes turbulentFlatPlate 2" (for SA model)
+export model_num=$2
+./Allrun_divSchemes.singularity
