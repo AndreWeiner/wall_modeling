@@ -9,14 +9,14 @@ The Reynolds number based on the plate length is of Re<sub>L</sub> = 5×10^6
 
 The '*Allrun*' script applies a selection of tubulence models to a range of y+
 meshes for which graphs are created that compare the predictions
-against the data from Weighardt.
+against the data from Wieghardt.
 
 For further information please visit:
 ```    
     https://www.openfoam.com/documentation/guides/latest/doc/verification-validation-turbulent-flat-plate-zpg.html
 ```
 
-This test case is a basic setting for turbulence models due to its simple geometry. By investigating the case, we are able to calculate and plot skin friction '*C<sub>f</sub>*' at the wall of the plate for each y+ which is compared to the analytical solution based on the empirical data by Weighardt. y+ values are strongly related to the size of meshes. Therefore, we can show how the skin friction changes depending on how the mesh is resolved. It is generally expected that the more the mesh is resolved, then the more accurate the result will be. There are two approaches to deal with the behavior of the fluid at the wall as follows.
+This test case is a basic setting for turbulence models due to its simple geometry. By investigating the case, we are able to calculate and plot skin friction '*C<sub>f</sub>*' at the wall of the plate for each y+ which is compared to the analytical solution based on the empirical data by Wieghardt. y+ values are strongly related to the size of meshes. Therefore, we can show how the skin friction changes depending on how the mesh is resolved. It is generally expected that the more the mesh is resolved, then the more accurate the result will be. There are two approaches to deal with the behavior of the fluid at the wall as follows.
 1. With Wall Functions
 2. Without Wall Functions
 
