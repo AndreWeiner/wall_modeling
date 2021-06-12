@@ -60,10 +60,10 @@ Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::calcNut() const
         max
         (
             scalar(0),
-            sqr(calcUTau(magGradU))/(magGradU + ROOTVSMALL) - nuw
+            sqr(calcIntegralUTau(magGradU))/(magGradU + ROOTVSMALL) - nuw
         )
     );
-
+    /*
     if (tolerance_ != 0.01)
     {
         // User-specified tolerance. Find out if current nut already satisfies
@@ -84,7 +84,7 @@ Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::calcNut() const
                 nutw[facei] = this->operator[](facei);
             }
         }
-    }
+    }*/
     return tnutw;
 }
 
@@ -189,6 +189,259 @@ Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::calcUTau
     return tuTau;
 }
 
+Foam::tmp<Foam::scalarField>
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::calcIntegralUTau
+(
+    const scalarField& magGradU
+) const
+{
+    scalarField err;
+    return calcIntegralUTau(magGradU, maxIter_, err);
+}
+
+Foam::tmp<Foam::scalarField>
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::calcIntegralUTau
+(
+    const scalarField& magGradU,
+    const label maxIter,
+    scalarField& err
+) const
+{
+    const label patchi = patch().index();
+
+    const turbulenceModel& turbModel = db().lookupObject<turbulenceModel>
+    (
+        IOobject::groupName
+        (
+            turbulenceModel::propertiesName,
+            internalField().group()
+        )
+    );
+    const scalarField& y = turbModel.y()[patchi];
+
+    const fvPatchVectorField& Uw = U(turbModel).boundaryField()[patchi];
+    const scalarField magUp(mag(Uw.patchInternalField() - Uw));
+
+    const tmp<scalarField> tnuw = turbModel.nu(patchi);
+    const scalarField& nuw = tnuw();
+
+    const scalarField& nutw = *this;
+
+    tmp<scalarField> tuTau(new scalarField(patch().size(), Zero));
+    scalarField& uTau = tuTau.ref();
+
+    err.setSize(uTau.size());
+    err = 0.0;
+
+    forAll(uTau, facei)
+    {
+        scalar ut = sqrt((nutw[facei] + nuw[facei])*magGradU[facei]);
+        // Note: for exact restart seed with laminar viscosity only:
+        //scalar ut = sqrt(nuw[facei]*magGradU[facei]);
+
+        // Number of integral points
+        scalar num_points = 10;
+        // Initial uTau values
+        scalar ut_old1 = ut;
+        scalar ut_old2 = 20.0;
+
+        // error = u_p_int[facei] - magUp[facei]
+        // Find the solution of the eqution "u_p_int[facei] = magUp[facei]" by "errorIntegralFunc"
+        scalar error = 10.0;
+        scalar error_old1 = errorIntegralFunc(E_, kappa_, magUp[facei], ut_old1, y[facei]*2, nuw[facei], num_points, 1.0);
+        scalar error_old2 = errorIntegralFunc(E_, kappa_, magUp[facei], ut_old2, y[facei]*2, nuw[facei], num_points, 1.0);
+
+        if (ROOTVSMALL < ut)
+        {
+            int iter = 0;
+
+            do
+            {
+                // By Secant method, we are able to find u_tau without using Spalding's function.
+                // This method needs two previous status.
+                ut = ut_old1 - error_old1*(ut_old1 - ut_old2)/(error_old1 - error_old2 + ROOTVSMALL);
+                error = errorIntegralFunc(E_, kappa_, magUp[facei], ut, y[facei]*2, nuw[facei], num_points, error_old1);
+
+                err[facei] = abs(error)/magUp[facei];
+
+                error_old2 = error_old1;
+                ut_old2 = ut_old1;
+                error_old1 = error;
+                ut_old1 = ut;
+
+            } while
+            (
+                ut > ROOTVSMALL
+             && err[facei] > tolerance_
+             && ++iter < maxIter
+            );
+
+            uTau[facei] = max(0.0, ut);
+        }
+
+    }
+
+    return tuTau;
+}
+
+Foam::scalar
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::velNewton
+(
+    const scalar E_,
+    const scalar kappa_,
+    scalar magUp_facei,
+    scalar ut,
+    const scalar y_facei,
+    const scalar nuw_facei
+) const
+{
+    scalar error = 1.0;
+
+    do
+    {
+        scalar f = -(y_facei*ut/nuw_facei) + magUp_facei/ut + 1/E_*(exp(kappa_*magUp_facei/ut) - 1 - kappa_*magUp_facei/ut - (1/2)*(kappa_*magUp_facei/ut)*(kappa_*magUp_facei/ut) - (1/6)*(kappa_*magUp_facei/ut)*(kappa_*magUp_facei/ut)*(kappa_*magUp_facei/ut));
+        // Derivative of f with respect to magUp_facei
+        scalar df = 1/ut + 1/E_*(kappa_/ut*exp(kappa_*magUp_facei/ut) - kappa_/ut - (kappa_*kappa_/(ut*ut))*magUp_facei - 1/2*(kappa_*kappa_*kappa_/(ut*ut*ut))*(magUp_facei*magUp_facei));
+
+        scalar u_new = magUp_facei - f/df;
+        error = abs(u_new - magUp_facei);
+
+        magUp_facei = u_new;
+
+    } while (error > ROOTVSMALL);
+    
+    return magUp_facei;
+}
+
+Foam::scalar
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::velBisection
+(
+    const scalar E_,
+    const scalar kappa_,    
+    scalar ut,
+    const scalar y_facei,
+    const scalar nuw_facei
+) const
+{
+    // Initial interval for Bisection Method
+    scalar a = -1e3;
+    scalar b = 1e6;
+    scalar c = 0.0;
+
+    do
+    {
+        // Left limit of interval
+        scalar f_a = -(y_facei*ut/nuw_facei) + a/ut + 1/E_*(exp(kappa_*a/ut) - 1 - kappa_*a/ut - (1/2)*(kappa_*a/ut)*(kappa_*a/ut) - (1/6)*(kappa_*a/ut)*(kappa_*a/ut)*(kappa_*a/ut));
+        // Right limit of interval
+        //scalar f_b = -(y_facei*ut/nuw_facei) + b/ut + 1/E_*(exp(kappa_*b/ut) - 1 - kappa_*b/ut - (1/2)*(kappa_*b/ut)*(kappa_*b/ut) - (1/6)*(kappa_*b/ut)*(kappa_*b/ut)*(kappa_*b/ut));
+
+        c = (a + b)/2;
+        scalar f_c = -(y_facei*ut/nuw_facei) + c/ut + 1/E_*(exp(kappa_*c/ut) - 1 - kappa_*c/ut - (1/2)*(kappa_*c/ut)*(kappa_*c/ut) - (1/6)*(kappa_*c/ut)*(kappa_*c/ut)*(kappa_*c/ut));
+        // If the solution is found before the interval is smaller than "ROOTVSMALL", "break" is applied.
+        if (f_c == 0)
+            break;
+
+        if ((f_c >= 0 && f_a >= 0) || (f_c < 0 && f_a < 0))
+            a = c;
+        else
+            b = c;
+    } while ((b - a)/2 > ROOTVSMALL);
+
+    scalar magUp_facei = c;
+
+    return magUp_facei;   
+}
+
+Foam::scalar
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::integralNewton
+(
+    const scalar E_,
+    const scalar kappa_,
+    const scalar magUp_facei,
+    scalar ut,
+    const scalar yf_facei,
+    const scalar nuw_facei,
+    scalar num_points
+) const
+{
+    scalar trap_sum = 0;
+
+    for(int i = 0; i < num_points; i++)
+    {
+        // Use Trapezoidal Method for numerical integration
+        trap_sum += velNewton(E_, kappa_, magUp_facei, ut, (yf_facei/num_points)*i, nuw_facei) + velNewton(E_, kappa_, magUp_facei, ut, (yf_facei/num_points)*(i+1), nuw_facei);
+    }
+    // LHS and RHS are already divided by the cell height.
+    scalar u_p_int_facei = trap_sum*0.5*(1/num_points);
+
+    return u_p_int_facei;
+}
+
+Foam::scalar
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::integralBisection
+(
+    const scalar E_,
+    const scalar kappa_,    
+    scalar ut,
+    const scalar yf_facei,
+    const scalar nuw_facei,
+    scalar num_points
+) const
+{
+    scalar trap_sum = 0;
+
+    for(int i = 0; i < num_points; i++)
+    {
+        // Use Trapezoidal Method for numerical integration
+        trap_sum += velBisection(E_, kappa_, ut, (yf_facei/num_points)*i, nuw_facei) + velBisection(E_, kappa_, ut, (yf_facei/num_points)*(i+1), nuw_facei);
+    }
+    // LHS and RHS are already divided by the cell height.
+    scalar u_p_int_facei = trap_sum*0.5*(1/num_points);
+
+    return u_p_int_facei;
+}
+
+Foam::scalar
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::integralCombined
+(
+    const scalar E_,
+    const scalar kappa_,
+    const scalar magUp_facei,
+    scalar ut,
+    const scalar yf_facei,
+    const scalar nuw_facei,
+    scalar num_points,
+    scalar u_p_int
+) const
+{
+    // Combine Newton and Bisection methods depending on u_p_int value
+    if (u_p_int > 1e6)
+        u_p_int = integralBisection(E_, kappa_, ut, yf_facei, nuw_facei, num_points);
+    else
+        u_p_int = integralNewton(E_, kappa_, magUp_facei, ut, yf_facei, nuw_facei, num_points);
+
+    return u_p_int;
+}
+
+Foam::scalar
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::errorIntegralFunc
+(
+    const scalar E_,
+    const scalar kappa_,
+    const scalar magUp_facei,
+    scalar ut,
+    const scalar yf_facei,
+    const scalar nuw_facei,
+    scalar num_points,
+    scalar error
+) const
+{
+    scalar u_p_int = error + magUp_facei;
+    // Use this function to find the solution of "u_p_int = magUp_facei"
+    scalar func = integralCombined(E_, kappa_, magUp_facei, ut, yf_facei, nuw_facei, num_points, u_p_int) - magUp_facei;
+
+    return func;
+}
 
 void Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::writeLocalEntries
 (

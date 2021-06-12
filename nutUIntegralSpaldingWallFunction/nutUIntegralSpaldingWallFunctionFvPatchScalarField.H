@@ -145,6 +145,86 @@ protected:
             scalarField& err
         ) const;
 
+        // Calculate uTau by the integral method
+        virtual tmp<scalarField> calcIntegralUTau(const scalarField& magGradU) const;
+
+        virtual tmp<scalarField> calcIntegralUTau
+        (
+            const scalarField& magGradU,
+            const label maxIter,
+            scalarField& err
+        ) const;
+
+        // Calculate the velocity by Newton's Method
+        virtual scalar velNewton
+        (
+            const scalar E_,
+            const scalar kappa_,
+            scalar magUp_facei,
+            scalar ut,
+            const scalar y_facei,
+            const scalar nuw_facei
+        ) const;
+
+        // Calculate the velocity by Bisection Method
+        virtual scalar velBisection
+        (
+            const scalar E_,
+            const scalar kappa_,
+            scalar ut,
+            const scalar y_facei,
+            const scalar nuw_facei
+        ) const;
+
+        // Calculate the integral based cell center velocity by Newton's Method
+        virtual scalar integralNewton
+        (
+            const scalar E_,
+            const scalar kappa_,
+            const scalar magUp_facei,
+            scalar ut,
+            const scalar yf_facei,
+            const scalar nuw_facei,
+            scalar num_points        
+        ) const;
+
+        // Calculate the integral based cell center velocity by Bisection Method
+        virtual scalar integralBisection
+        (
+            const scalar E_,
+            const scalar kappa_,            
+            scalar ut,
+            const scalar yf_facei,
+            const scalar nuw_facei,
+            scalar num_points        
+        ) const;
+
+        // Combine two methods for finding the integral based cell center velocity
+        virtual scalar integralCombined
+        (
+            const scalar E_,
+            const scalar kappa_,
+            const scalar magUp_facei,
+            scalar ut,
+            const scalar yf_facei,
+            const scalar nuw_facei,
+            scalar num_points,
+            scalar u_p_int
+        ) const;
+
+        // Calculate uTau from the integral based cell center velocity
+        virtual scalar errorIntegralFunc
+        (
+            const scalar E_,
+            const scalar kappa_,
+            const scalar magUp_facei,
+            scalar ut,
+            const scalar yf_facei,
+            const scalar nuw_facei,
+            scalar num_points,
+            scalar error
+        ) const;
+        
         //- Write local wall function variables
         virtual void writeLocalEntries(Ostream&) const;
 
