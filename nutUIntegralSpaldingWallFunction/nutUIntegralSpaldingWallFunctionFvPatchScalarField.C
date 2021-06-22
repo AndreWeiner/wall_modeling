@@ -230,6 +230,37 @@ Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::calcIntegralUTau
     tmp<scalarField> tuTau(new scalarField(patch().size(), Zero));
     scalarField& uTau = tuTau.ref();
 
+    /*********************************************/
+    // Test to access mesh methods    
+    const fvMesh& mesh = patch().boundaryMesh().mesh();
+    // Access polyPatch
+    const polyPatch& bouPatch = patch().patch();
+
+    // Get global IDs of faces in boundary patch
+    labelList patchFaceIDs(bouPatch.size());
+    forAll (bouPatch,faceI)
+    {
+        patchFaceIDs[faceI] = bouPatch.start()+faceI;
+    }
+
+    // Get IDs of primary adjacent cells
+    const labelList& adjacentCellIDs = bouPatch.faceCells();
+
+    // Get IDs of faces of the cell that are opposite to the patch face
+    labelList oppFaceIDs(patchFaceIDs.size());
+
+    forAll (patchFaceIDs, faceI)
+    {
+        oppFaceIDs[faceI] =
+            mesh.cells()[adjacentCellIDs[faceI]].opposingFaceLabel
+            (
+                patchFaceIDs[faceI],mesh.faces()
+            );
+    }
+    
+    //Info << "faceIDs = " << oppFaceIDs << endl;
+    /*********************************************/
+
     err.setSize(uTau.size());
     err = 0.0;
 
@@ -245,202 +276,187 @@ Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::calcIntegralUTau
         scalar ut_old1 = ut;
         scalar ut_old2 = 20.0;
 
-        // error = u_p_int[facei] - magUp[facei]
-        // Find the solution of the eqution "u_p_int[facei] = magUp[facei]" by "errorIntegralFunc"
-        scalar error = 10.0;
-        scalar error_old1 = errorIntegralFunc(E_, kappa_, magUp[facei], ut_old1, y[facei]*2, nuw[facei], num_points, 1.0);
-        scalar error_old2 = errorIntegralFunc(E_, kappa_, magUp[facei], ut_old2, y[facei]*2, nuw[facei], num_points, 1.0);
-
-        if (ROOTVSMALL < ut)
+        // diff = u_avg[facei] - magUp[facei]
+        // Find the solution of the eqution "u_avg[facei] = magUp[facei]"
+        scalar diff = 10.0;
+        
+        if (y[facei]*2 < 5e-4) // Newton's method
         {
-            int iter = 0;
-
-            do
+            scalar diff_old1 = average_velocity(y[facei]*2, ut_old1, nuw[facei], "NEWTON", E_, kappa_, num_points) - magUp[facei];
+            scalar diff_old2 = average_velocity(y[facei]*2, ut_old2, nuw[facei], "NEWTON", E_, kappa_, num_points) - magUp[facei];
+            if (ROOTVSMALL < ut)
             {
-                // By Secant method, we are able to find u_tau without using Spalding's function.
-                // This method needs two previous status.
-                ut = ut_old1 - error_old1*(ut_old1 - ut_old2)/(error_old1 - error_old2 + ROOTVSMALL);
-                error = errorIntegralFunc(E_, kappa_, magUp[facei], ut, y[facei]*2, nuw[facei], num_points, error_old1);
+                int iter = 0;
 
-                err[facei] = abs(error)/magUp[facei];
+                do
+                {
+                    // By Secant method, we are able to find u_tau without using Spalding's function.
+                    // This method needs two previous status.
+                    ut = ut_old1 - diff_old1*(ut_old1 - ut_old2)/(diff_old1 - diff_old2 + ROOTVSMALL);
+                    diff = average_velocity(y[facei]*2, ut, nuw[facei], "NEWTON", E_, kappa_, num_points) - magUp[facei];
 
-                error_old2 = error_old1;
-                ut_old2 = ut_old1;
-                error_old1 = error;
-                ut_old1 = ut;
+                    err[facei] = abs(diff)/magUp[facei];
 
-            } while
-            (
-                ut > ROOTVSMALL
-             && err[facei] > tolerance_
-             && ++iter < maxIter
-            );
+                    diff_old2 = diff_old1;
+                    ut_old2 = ut_old1;
+                    diff_old1 = diff;
+                    ut_old1 = ut;
 
-            uTau[facei] = max(0.0, ut);
+                } while
+                (
+                    ut > ROOTVSMALL
+                && err[facei] > tolerance_
+                && ++iter < maxIter
+                );
+
+                uTau[facei] = max(0.0, ut);
+            }        
         }
 
+        else // Bisection method
+        {
+            scalar diff_old1 = average_velocity(y[facei]*2, ut_old1, nuw[facei], "BISECTION", E_, kappa_, num_points) - magUp[facei];
+            scalar diff_old2 = average_velocity(y[facei]*2, ut_old2, nuw[facei], "BISECTION", E_, kappa_, num_points) - magUp[facei];
+            if (ROOTVSMALL < ut)
+            {
+                int iter = 0;
+
+                do
+                {
+                    // By Secant method, we are able to find u_tau without using Spalding's function.
+                    // This method needs two previous status.
+                    ut = ut_old1 - diff_old1*(ut_old1 - ut_old2)/(diff_old1 - diff_old2 + ROOTVSMALL);
+                    diff = average_velocity(y[facei]*2, ut, nuw[facei], "BISECTION", E_, kappa_, num_points) - magUp[facei];
+
+                    err[facei] = abs(diff)/magUp[facei];
+
+                    diff_old2 = diff_old1;
+                    ut_old2 = ut_old1;
+                    diff_old1 = diff;
+                    ut_old1 = ut;
+
+                } while
+                (
+                    ut > ROOTVSMALL
+                && err[facei] > tolerance_
+                && ++iter < maxIter
+                );
+
+                uTau[facei] = max(0.0, ut);
+            }        
+        }
     }
 
     return tuTau;
 }
 
 Foam::scalar
-Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::velNewton
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::spaldings_law
 (
+    const scalar u_plus,
     const scalar E_,
-    const scalar kappa_,
-    scalar magUp_facei,
-    scalar ut,
-    const scalar y_facei,
-    const scalar nuw_facei
+    const scalar kappa_
 ) const
 {
-    scalar error = 1.0;
+    return u_plus + 1.0/E_ * (exp(kappa_*u_plus) - 1.0 - kappa_*u_plus - (kappa_*u_plus)*(kappa_*u_plus)/2.0 - (kappa_*u_plus)*(kappa_*u_plus)*(kappa_*u_plus)/6.0);
+}
 
-    do
+Foam::scalar
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::spalding_velocity
+(
+    const scalar y_facei,
+    scalar ut,
+    const scalar nuw_facei,
+    string method,
+    const scalar E_,
+    const scalar kappa_
+) const
+{
+    scalar magUp_facei = ut;
+    scalar n_iter = 0;
+    scalar residual = 1.0;
+
+    if (method == "NEWTON") // Newton's method
     {
-        scalar f = -(y_facei*ut/nuw_facei) + magUp_facei/ut + 1/E_*(exp(kappa_*magUp_facei/ut) - 1 - kappa_*magUp_facei/ut - (1/2)*(kappa_*magUp_facei/ut)*(kappa_*magUp_facei/ut) - (1/6)*(kappa_*magUp_facei/ut)*(kappa_*magUp_facei/ut)*(kappa_*magUp_facei/ut));
-        // Derivative of f with respect to magUp_facei
-        scalar df = 1/ut + 1/E_*(kappa_/ut*exp(kappa_*magUp_facei/ut) - kappa_/ut - (kappa_*kappa_/(ut*ut))*magUp_facei - 1/2*(kappa_*kappa_*kappa_/(ut*ut*ut))*(magUp_facei*magUp_facei));
+        do
+        {            
+            scalar f = spaldings_law(magUp_facei/ut, E_, kappa_) - y_facei*ut/nuw_facei;
+            //scalar f = -(y_facei*ut/nuw_facei) + magUp_facei/ut + 1/E_*(exp(kappa_*magUp_facei/ut) - 1 - kappa_*magUp_facei/ut - (1/2)*(kappa_*magUp_facei/ut)*(kappa_*magUp_facei/ut) - (1/6)*(kappa_*magUp_facei/ut)*(kappa_*magUp_facei/ut)*(kappa_*magUp_facei/ut));
+            // Derivative of f with respect to magUp_facei
+            scalar df = 1/ut + 1/E_*(kappa_/ut*exp(kappa_*magUp_facei/ut) - kappa_/ut - (kappa_*kappa_/(ut*ut))*magUp_facei - 1/2*(kappa_*kappa_*kappa_/(ut*ut*ut))*(magUp_facei*magUp_facei));
 
-        scalar u_new = magUp_facei - f/df;
-        error = abs(u_new - magUp_facei);
+            scalar u_new = magUp_facei - f/df;
+            residual = abs(u_new - magUp_facei);
 
-        magUp_facei = u_new;
+            magUp_facei = u_new;
+            n_iter += 1;
 
-    } while (error > ROOTVSMALL);
-    
+        } while (residual > ROOTVSMALL && n_iter < maxIter_);        
+    }
+
+    else if (method == "BISECTION") // Bisection method
+    {   
+        scalar u_upper = ut * 100.0;
+        scalar u_lower = 0.0;
+        do
+        {
+            magUp_facei = 0.5 * (u_upper + u_lower);
+            scalar f_upper = spaldings_law(u_upper/ut, E_, kappa_) - y_facei*ut/nuw_facei;
+            scalar f_center = spaldings_law(magUp_facei/ut, E_, kappa_) - y_facei*ut/nuw_facei;
+            if (f_center * f_upper > 0.0)
+            {
+                u_upper = magUp_facei;
+            }
+            else
+            {
+                u_lower = magUp_facei;
+            }
+            residual = abs(f_center);
+            n_iter += 1;
+        } while (residual > ROOTVSMALL && n_iter < maxIter_);        
+    }
+
     return magUp_facei;
 }
 
 Foam::scalar
-Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::velBisection
+Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::average_velocity
 (
-    const scalar E_,
-    const scalar kappa_,    
+    const scalar yf_facei,
     scalar ut,
-    const scalar y_facei,
-    const scalar nuw_facei
-) const
-{
-    // Initial interval for Bisection Method
-    scalar a = -1e3;
-    scalar b = 1e6;
-    scalar c = 0.0;
-
-    do
-    {
-        // Left limit of interval
-        scalar f_a = -(y_facei*ut/nuw_facei) + a/ut + 1/E_*(exp(kappa_*a/ut) - 1 - kappa_*a/ut - (1/2)*(kappa_*a/ut)*(kappa_*a/ut) - (1/6)*(kappa_*a/ut)*(kappa_*a/ut)*(kappa_*a/ut));
-        // Right limit of interval
-        //scalar f_b = -(y_facei*ut/nuw_facei) + b/ut + 1/E_*(exp(kappa_*b/ut) - 1 - kappa_*b/ut - (1/2)*(kappa_*b/ut)*(kappa_*b/ut) - (1/6)*(kappa_*b/ut)*(kappa_*b/ut)*(kappa_*b/ut));
-
-        c = (a + b)/2;
-        scalar f_c = -(y_facei*ut/nuw_facei) + c/ut + 1/E_*(exp(kappa_*c/ut) - 1 - kappa_*c/ut - (1/2)*(kappa_*c/ut)*(kappa_*c/ut) - (1/6)*(kappa_*c/ut)*(kappa_*c/ut)*(kappa_*c/ut));
-        // If the solution is found before the interval is smaller than "ROOTVSMALL", "break" is applied.
-        if (f_c == 0)
-            break;
-
-        if ((f_c >= 0 && f_a >= 0) || (f_c < 0 && f_a < 0))
-            a = c;
-        else
-            b = c;
-    } while ((b - a)/2 > ROOTVSMALL);
-
-    scalar magUp_facei = c;
-
-    return magUp_facei;   
-}
-
-Foam::scalar
-Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::integralNewton
-(
+    const scalar nuw_facei,
+    string method,
     const scalar E_,
     const scalar kappa_,
-    const scalar magUp_facei,
-    scalar ut,
-    const scalar yf_facei,
-    const scalar nuw_facei,
     scalar num_points
 ) const
 {
     scalar trap_sum = 0;
+    scalar u_avg_facei = 0;
 
-    for(int i = 0; i < num_points; i++)
+    if (method == "NEWTON")
     {
-        // Use Trapezoidal Method for numerical integration
-        trap_sum += velNewton(E_, kappa_, magUp_facei, ut, (yf_facei/num_points)*i, nuw_facei) + velNewton(E_, kappa_, magUp_facei, ut, (yf_facei/num_points)*(i+1), nuw_facei);
+        for (int i = 0; i < num_points; i++)
+        {
+            // Use Trapezoidal Method for numerical integration
+            trap_sum += spalding_velocity((yf_facei/num_points)*i, ut, nuw_facei, "NEWTON", E_, kappa_) + spalding_velocity((yf_facei/num_points)*(i+1), ut, nuw_facei, "NEWTON", E_, kappa_);
+        }
+        // LHS and RHS are already divided by the cell height.
+        u_avg_facei = trap_sum*0.5*(1/num_points);
     }
-    // LHS and RHS are already divided by the cell height.
-    scalar u_p_int_facei = trap_sum*0.5*(1/num_points);
 
-    return u_p_int_facei;
-}
-
-Foam::scalar
-Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::integralBisection
-(
-    const scalar E_,
-    const scalar kappa_,    
-    scalar ut,
-    const scalar yf_facei,
-    const scalar nuw_facei,
-    scalar num_points
-) const
-{
-    scalar trap_sum = 0;
-
-    for(int i = 0; i < num_points; i++)
+    else if (method == "BISECTION")
     {
-        // Use Trapezoidal Method for numerical integration
-        trap_sum += velBisection(E_, kappa_, ut, (yf_facei/num_points)*i, nuw_facei) + velBisection(E_, kappa_, ut, (yf_facei/num_points)*(i+1), nuw_facei);
+        for (int i = 0; i < num_points; i++)
+        {
+            // Use Trapezoidal Method for numerical integration
+            trap_sum += spalding_velocity((yf_facei/num_points)*i, ut, nuw_facei, "BISECTION", E_, kappa_) + spalding_velocity((yf_facei/num_points)*(i+1), ut, nuw_facei, "BISECTION", E_, kappa_);
+        }
+        // LHS and RHS are already divided by the cell height.
+        u_avg_facei = trap_sum*0.5*(1/num_points);
     }
-    // LHS and RHS are already divided by the cell height.
-    scalar u_p_int_facei = trap_sum*0.5*(1/num_points);
 
-    return u_p_int_facei;
-}
-
-Foam::scalar
-Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::integralCombined
-(
-    const scalar E_,
-    const scalar kappa_,
-    const scalar magUp_facei,
-    scalar ut,
-    const scalar yf_facei,
-    const scalar nuw_facei,
-    scalar num_points,
-    scalar u_p_int
-) const
-{
-    // Combine Newton and Bisection methods depending on u_p_int value
-    if (u_p_int > 1e6)
-        u_p_int = integralBisection(E_, kappa_, ut, yf_facei, nuw_facei, num_points);
-    else
-        u_p_int = integralNewton(E_, kappa_, magUp_facei, ut, yf_facei, nuw_facei, num_points);
-
-    return u_p_int;
-}
-
-Foam::scalar
-Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::errorIntegralFunc
-(
-    const scalar E_,
-    const scalar kappa_,
-    const scalar magUp_facei,
-    scalar ut,
-    const scalar yf_facei,
-    const scalar nuw_facei,
-    scalar num_points,
-    scalar error
-) const
-{
-    scalar u_p_int = error + magUp_facei;
-    // Use this function to find the solution of "u_p_int = magUp_facei"
-    scalar func = integralCombined(E_, kappa_, magUp_facei, ut, yf_facei, nuw_facei, num_points, u_p_int) - magUp_facei;
-
-    return func;
+    return u_avg_facei;
 }
 
 void Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::writeLocalEntries
