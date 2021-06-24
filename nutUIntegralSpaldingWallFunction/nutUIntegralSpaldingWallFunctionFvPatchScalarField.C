@@ -258,7 +258,62 @@ Foam::nutUIntegralSpaldingWallFunctionFvPatchScalarField::calcIntegralUTau
             );
     }
     
-    //Info << "faceIDs = " << oppFaceIDs << endl;
+    // Get IDs of secondary adjacent cells
+    labelList secAdjacentCellIDs(adjacentCellIDs.size());
+
+    label globFace = -1;
+    forAll (oppFaceIDs, faceI)
+    {
+        globFace = oppFaceIDs[faceI];
+
+        if (mesh.owner()[globFace] == adjacentCellIDs[faceI])
+        {
+            secAdjacentCellIDs[faceI] = mesh.neighbour()[globFace];
+        }
+        else
+        {
+            secAdjacentCellIDs[faceI] = mesh.owner()[globFace];
+        }
+    }
+
+    // Get IDs of faces of the cell that are opposite to the opponent face
+    labelList secOppFaceIDs(oppFaceIDs.size());
+
+    forAll (oppFaceIDs, faceI)
+    {
+        secOppFaceIDs[faceI] =
+            mesh.cells()[secAdjacentCellIDs[faceI]].opposingFaceLabel
+            (
+                oppFaceIDs[faceI],mesh.faces()
+            );
+    }
+
+    // compute distance between boundary face and first cell face opposite
+    scalarList distF(bouPatch.size(), 0.0);
+    forAll(bouPatch, faceI)
+    {
+        distF[faceI] = mag(
+                       patch().Cf()[faceI]
+                     - patch().Cf()[oppFaceIDs[faceI]]
+                    );
+    }
+
+    // area of boundary faces
+    const scalarField magSf(mag(patch().Sf()));
+        
+    // print velocity for faces of the cell that are opposite to the patch face
+    for (int i = 0; i < oppFaceIDs.size(); i++)
+    {
+        Info << "Index = " << oppFaceIDs[i] << nl
+        << "Velocity = " << U(turbModel).internalField()[oppFaceIDs[i]] << endl;
+    }
+
+    // print velocity for secondary adjacent cells
+    for (int i = 0; i < secOppFaceIDs.size(); i++)
+    {
+        Info << "Index = " << secOppFaceIDs[i] << nl
+        << "Velocity = " << U(turbModel).internalField()[secOppFaceIDs[i]] << endl;
+    }
     /*********************************************/
 
     err.setSize(uTau.size());
