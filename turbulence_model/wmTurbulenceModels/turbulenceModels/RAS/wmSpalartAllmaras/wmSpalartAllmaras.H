@@ -119,7 +119,7 @@ protected:
             dimensionedScalar Cv1_;
             dimensionedScalar Cs_;
         /*---------------------- Newly added code ------------------------*/
-        // Additional coefficients
+        // Additional hardcoded coefficients
             scalar E_ = 9.8;
             label maxIter_ = 100;
             scalar tolerance_ = 1e-8;

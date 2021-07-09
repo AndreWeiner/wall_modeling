@@ -195,15 +195,18 @@ void wmSpalartAllmaras<BasicTurbulenceModel>::correctNut
     // Area of boundary faces
     const scalarField magSf(mag(this->mesh_.Sf().boundaryField()[surfaceID]));
 
+    // A reference variable nut_wall for nut_ at the bottomWall patch
+    scalarField& nut_wall = this->nut_.boundaryFieldRef()[surfaceID];
+
     // The nut calculation result is saved to the variable tNut
     // This calculation is executed instead of wall functions
     scalarField tNut = calcNut(surfaceID, adjacentCellIDs);
     
-    // Save tNut value to nut_ at the first cell center normal to the wall
-    forAll (adjacentCellIDs, faceI)
+    // Save tNut value to nut_wall (automatically applied to nut_ at the wall)
+    forAll (patchFaceIDs, faceI)
     {
-        this->nut_[adjacentCellIDs[faceI]] = tNut[faceI];        
-    }    
+        nut_wall[faceI] = tNut[faceI];
+    }   
     /*----------------------------------------------------------------*/
 
     this->nut_.correctBoundaryConditions();
@@ -216,6 +219,11 @@ void wmSpalartAllmaras<BasicTurbulenceModel>::correctNut
 template<class BasicTurbulenceModel>
 scalarField wmSpalartAllmaras<BasicTurbulenceModel>::calcNut(label patchi, const labelList& adjacentCellIDs)
 {
+    /* The information of the first cell center normal to the wall is used
+    instead of patchInternalField() because this is not a fvPatch class and
+    the value is not updated in the boundary field yet. (patchInternalField()
+    returns given internal field next to patch as patch field.) */
+
     // Use the height information of the first cell center normal to the wall
     scalarField y = this->y_.boundaryField()[patchi];
     forAll (adjacentCellIDs, faceI)
@@ -230,7 +238,7 @@ scalarField wmSpalartAllmaras<BasicTurbulenceModel>::calcNut(label patchi, const
         Uw[faceI] = this->U_[adjacentCellIDs[faceI]];
     }
     
-    // Direct calculation of gradient instead of magGradU(mag(Uw.snGrad()))    
+    // Direct calculation of gradient instead of magGradU(mag(Uw.snGrad()))
     const scalarField magGradU(mag((Uw - this->U_.boundaryField()[patchi])/y));
     
     // nu at the wall
@@ -271,8 +279,8 @@ tmp<scalarField> wmSpalartAllmaras<BasicTurbulenceModel>::calcIntegralUTau
     const labelList& adjacentCellIDs
 )
 {
-    // Hardcoded kappa value in order to use scalar instead of dimensionedScalar
-    const scalar kappa = 0.41;
+    // Employ a variable kappa in order to use scalar instead of dimensionedScalar
+    const scalar kappa = this->kappa_.value();
 
     // Use the height information of the first cell center normal to the wall
     scalarField y = this->y_.boundaryField()[patchi];
