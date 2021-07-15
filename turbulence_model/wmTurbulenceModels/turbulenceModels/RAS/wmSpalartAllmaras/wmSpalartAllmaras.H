@@ -158,10 +158,24 @@ protected:
         void correctNut(const volScalarField& fv1);
         /*---------------------- Newly added code ------------------------*/
         // Calculate the turbulent viscosity
-        scalarField calcNut(label patchi, const labelList& adjacentCellIDs);
+        void calcNut
+        (
+            label patchi, 
+            const labelList& adjacentCellIDs,
+            labelList oppFaceIDs, 
+            labelList secAdjacentCellIDs
+        );
 
         // Calculate uTau by the integral method
-        tmp<scalarField> calcIntegralUTau(const scalarField& magGradU, label patchi, const labelList& adjacentCellIDs);
+        tmp<scalarField> calcIntegralUTau
+        (
+            const scalarField& magGradU, 
+            label patchi, 
+            const labelList& adjacentCellIDs,
+            labelList oppFaceIDs, 
+            labelList secAdjacentCellIDs,
+            string field
+        );
 
         tmp<scalarField> calcIntegralUTau
         (
@@ -169,7 +183,10 @@ protected:
             const label maxIter,
             scalarField& err,
             label patchi,
-            const labelList& adjacentCellIDs
+            const labelList& adjacentCellIDs,
+            labelList oppFaceIDs, 
+            labelList secAdjacentCellIDs,
+            string field
         );
 
         // Spalding's law of the wall
@@ -184,7 +201,7 @@ protected:
         (
             const scalar y_facei,
             scalar ut,
-            const scalar nuw_facei,
+            const scalar nuwf_facei,
             string method,
             const scalar kappa
         );
@@ -194,7 +211,7 @@ protected:
         (
             const scalar yf_facei,
             scalar ut,
-            const scalar nuw_facei,
+            const scalar nuwf_facei,
             string method,
             const scalar kappa,
             scalar num_points
