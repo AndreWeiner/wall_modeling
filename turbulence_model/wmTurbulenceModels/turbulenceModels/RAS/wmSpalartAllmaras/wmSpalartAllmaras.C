@@ -281,13 +281,7 @@ void wmSpalartAllmaras<BasicTurbulenceModel>::calcNut
             tmp_magGradUf[faceI] = mag(U_sngrad.internalField()[oppFaceIDs[faceI]]);
         }        
     }
-    /*
-    // Analytical velocity gradient from the wall to the first cell face opposite to the wall
-    const surfaceScalarField y_face = fvc::interpolate(this->y_);
-    forAll (oppFaceIDs, faceI)
-    {
-        tmp_magGradUf[faceI] = mag(U_face[oppFaceIDs[faceI]])/y_face[oppFaceIDs[faceI]];
-    }*/
+    
     const scalarField magGradUf(tmp_magGradUf);
 
 
@@ -370,9 +364,9 @@ tmp<scalarField> wmSpalartAllmaras<BasicTurbulenceModel>::calcIntegralUTau
     scalarField dist_wall = mag(this->mesh_.Cf().boundaryField()[patchi]);
     forAll (adjacentCellIDs, faceI)
     {
-        dist_wall[faceI] = mag(this->mesh_.Cf()[adjacentCellIDs[faceI]] 
+        dist_wall[faceI] = mag(this->mesh_.C()[adjacentCellIDs[faceI]] 
                         - this->mesh_.Cf().boundaryField()[patchi][faceI]);
-    }
+    }    
 
     // Distance between the first cell face opposite to the wall and the wall
     scalarField dist_fface = mag(this->mesh_.Cf().boundaryField()[patchi]);
@@ -380,7 +374,7 @@ tmp<scalarField> wmSpalartAllmaras<BasicTurbulenceModel>::calcIntegralUTau
     {
         dist_fface[faceI] = mag(this->mesh_.Cf()[oppFaceIDs[faceI]] 
                         - this->mesh_.Cf().boundaryField()[patchi][faceI]);
-    }
+    }    
     
     // Initialization of variables for the wall patch
     // Save the first cell center height as a default value (for the wall patch)
