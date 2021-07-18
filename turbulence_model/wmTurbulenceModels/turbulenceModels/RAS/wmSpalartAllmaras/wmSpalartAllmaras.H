@@ -123,6 +123,9 @@ protected:
             scalar E_ = 9.8;
             label maxIter_ = 100;
             scalar tolerance_ = 1e-8;
+
+        // Face values of nut
+            surfaceScalarField nut_face = fvc::interpolate(this->nut_);
         /*----------------------------------------------------------------*/
         
         // Fields
@@ -163,7 +166,9 @@ protected:
             label patchi, 
             const labelList& adjacentCellIDs,
             labelList oppFaceIDs, 
-            labelList secAdjacentCellIDs
+            labelList secAdjacentCellIDs,                        
+            const surfaceVectorField U_face,
+            const surfaceVectorField U_sngrad
         );
 
         // Calculate uTau by the integral method
@@ -174,6 +179,7 @@ protected:
             const labelList& adjacentCellIDs,
             labelList oppFaceIDs, 
             labelList secAdjacentCellIDs,
+            const surfaceVectorField U_face,
             string field
         );
 
@@ -186,6 +192,7 @@ protected:
             const labelList& adjacentCellIDs,
             labelList oppFaceIDs, 
             labelList secAdjacentCellIDs,
+            const surfaceVectorField U_face,
             string field
         );
 
@@ -199,7 +206,7 @@ protected:
         // Invert Spalding's law to compute physical velocity
         scalar spalding_velocity
         (
-            const scalar y_facei,
+            const scalar dist_facei,
             scalar ut,
             const scalar nuwf_facei,
             string method,
@@ -209,7 +216,7 @@ protected:
         // Execute a numerical integration method to calculate a new average velocity
         scalar average_velocity
         (
-            const scalar yf_facei,
+            const scalar distf_facei,
             scalar ut,
             const scalar nuwf_facei,
             string method,

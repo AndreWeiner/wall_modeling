@@ -195,12 +195,29 @@ void wmSpalartAllmaras<BasicTurbulenceModel>::correctNut
     // Area of boundary faces
     const scalarField magSf(mag(this->mesh_.Sf().boundaryField()[surfaceID]));
 
+    const surfaceScalarField y_face = fvc::interpolate(this->y_);
+    // Interpolate face values for cell center velocities
+    const surfaceVectorField U_face = fvc::interpolate(this->U_);
+    const surfaceVectorField U_sngrad = fvc::snGrad(this->U_);
+    
+        
+    // For temporary sanity check at the middle of the plate
+    Info << "yfirst = " << this->y_[adjacentCellIDs[200]] << "\tUfirst = "
+    << this->U_[adjacentCellIDs[200]] << "\tnutfirst = " << this->nut_[adjacentCellIDs[200]]
+    << nl << "yface200 = " << y_face[oppFaceIDs[200]] << "\tUface200 = "
+    << U_face[oppFaceIDs[200]] << "\tnutface200 = " << this->nut_face[oppFaceIDs[200]] << nl
+    << "ysecond = " << this->y_[secAdjacentCellIDs[200]] << "\tUsecond = "
+    << this->U_[secAdjacentCellIDs[200]] << "\tnutsecond = " << this->nut_[secAdjacentCellIDs[200]]
+    << endl;
+
+
     // The nut calculation result is saved to this->nut_ directly
     // This calculation is executed instead of wall functions
     // Additionally, nut at the first cell face opposite to the wall is also calculated
     calcNut
     (
-        surfaceID, adjacentCellIDs, oppFaceIDs, secAdjacentCellIDs
+        surfaceID, adjacentCellIDs, oppFaceIDs, secAdjacentCellIDs,
+        U_face, U_sngrad
     );    
     /*----------------------------------------------------------------*/
 
@@ -217,30 +234,13 @@ void wmSpalartAllmaras<BasicTurbulenceModel>::calcNut
     label patchi, 
     const labelList& adjacentCellIDs, 
     labelList oppFaceIDs, 
-    labelList secAdjacentCellIDs
+    labelList secAdjacentCellIDs,    
+    const surfaceVectorField U_face,
+    const surfaceVectorField U_sngrad
 )
 {
-    /* The information of the first cell center normal to the wall is used
-    instead of patchInternalField() because this is not a fvPatch class and
-    the value is not updated in the boundary field yet. (patchInternalField()
-    returns given internal field next to patch as patch field.) */
-
-    // Use the height information of the first cell center normal to the wall
-    scalarField y = this->y_.boundaryField()[patchi]; // Initialization
-    forAll (adjacentCellIDs, faceI)
-    {
-        y[faceI] = this->y_[adjacentCellIDs[faceI]];
-    }
-
-    // Use the velocity information of the first cell center normal to the wall
-    vectorField Uw = this->U_.boundaryField()[patchi]; // Initialization
-    forAll (adjacentCellIDs, faceI)
-    {
-        Uw[faceI] = this->U_[adjacentCellIDs[faceI]];
-    }
-    
-    // Direct calculation of gradient instead of magGradU(mag(Uw.snGrad()))
-    const scalarField magGradU(mag((Uw - this->U_.boundaryField()[patchi])/y));
+    // Gradient of the velocity at the wall patch
+    const scalarField magGradU(mag(U_sngrad.boundaryField()[patchi]));
     
     // nu at the wall
     tmp<scalarField> tnuw = this->nu(patchi);
@@ -255,7 +255,7 @@ void wmSpalartAllmaras<BasicTurbulenceModel>::calcNut
             sqr(calcIntegralUTau
             (
                 magGradU, patchi, adjacentCellIDs, oppFaceIDs, 
-                secAdjacentCellIDs, "Wall"
+                secAdjacentCellIDs, U_face, "Wall"
             ))/(magGradU + ROOTVSMALL) - nuw
         )
     );
@@ -265,32 +265,36 @@ void wmSpalartAllmaras<BasicTurbulenceModel>::calcNut
 
     // Save tnutw value to nut_wall (automatically applied to nut_ at the wall)    
     nut_wall = tnutw;
-    
-    // Use half of the length between the first cell center and the second cell center
-    // (Use cell center values)
-    // It assumes that the half of the length is from the first cell face to the second cell center
-    scalarField diffyf = this->y_.boundaryField()[patchi];
-    forAll (adjacentCellIDs, faceI)
-    {
-        diffyf[faceI] = (this->y_.internalField()[secAdjacentCellIDs[faceI]] 
-                    - this->y_.internalField()[adjacentCellIDs[faceI]])/2;        
-    }
 
-    // Use the velocity information between the first cell center and the second cell center
-    // (Use cell center values)
-    // It assumes that the half of the length is from the first cell face to the second cell center
-    vectorField diffUf = this->U_.boundaryField()[patchi];
+    
+    // Gradient of the velocity at the first cell face opposite to the wall
+    scalarField tmp_magGradUf(mag(U_sngrad.boundaryField()[patchi]));    
     forAll (oppFaceIDs, faceI)
     {
-        diffUf[faceI] = (this->U_.internalField()[adjacentCellIDs[faceI]] 
-                        - this->U_.internalField()[secAdjacentCellIDs[faceI]])/2;
-        // To avoid zero denominator in x and y-direction
-        diffUf[faceI][0] += ROOTVSMALL;
-        diffUf[faceI][1] += ROOTVSMALL;
+        // In order to avoid zero denominator for the first time step
+        if (mag(U_sngrad.internalField()[oppFaceIDs[faceI]]) == 0)
+        {
+            tmp_magGradUf[faceI] = 1;
+        }        
+        else
+        {
+            tmp_magGradUf[faceI] = mag(U_sngrad.internalField()[oppFaceIDs[faceI]]);
+        }        
     }
+    /*
+    // Analytical velocity gradient from the wall to the first cell face opposite to the wall
+    const surfaceScalarField y_face = fvc::interpolate(this->y_);
+    forAll (oppFaceIDs, faceI)
+    {
+        tmp_magGradUf[faceI] = mag(U_face[oppFaceIDs[faceI]])/y_face[oppFaceIDs[faceI]];
+    }*/
+    const scalarField magGradUf(tmp_magGradUf);
 
-    // Direct calculation of gradient instead of magGradU(mag(Uw.snGrad()))
-    const scalarField magGradUf(mag(diffUf/diffyf));
+
+    // Sanity check for magGradU at the middle of the plate
+    Info << "magGradU[200] : " << magGradU[200] << nl
+    << "magGradUf[200] : " << magGradUf[200] << endl;
+
     
     // nu at the first cell face opposite to the wall    
     scalarField nuf = this->nu(patchi);
@@ -309,7 +313,7 @@ void wmSpalartAllmaras<BasicTurbulenceModel>::calcNut
             sqr(calcIntegralUTau
             (
                 magGradUf, patchi, adjacentCellIDs, oppFaceIDs, 
-                secAdjacentCellIDs, "Face"
+                secAdjacentCellIDs, U_face, "Face"
             ))/(magGradUf + ROOTVSMALL) - nuf
         )
     );
@@ -318,7 +322,7 @@ void wmSpalartAllmaras<BasicTurbulenceModel>::calcNut
     scalarField tnut = tnutf;
     forAll (oppFaceIDs, faceI)
     {
-        this->nut_[oppFaceIDs[faceI]] = tnut[faceI];
+        this->nut_face[oppFaceIDs[faceI]] = tnut[faceI];
     }    
 }
 
@@ -329,7 +333,8 @@ tmp<scalarField> wmSpalartAllmaras<BasicTurbulenceModel>::calcIntegralUTau
     label patchi,
     const labelList& adjacentCellIDs,
     labelList oppFaceIDs, 
-    labelList secAdjacentCellIDs,
+    labelList secAdjacentCellIDs,    
+    const surfaceVectorField U_face,
     string field
 )
 {
@@ -337,7 +342,7 @@ tmp<scalarField> wmSpalartAllmaras<BasicTurbulenceModel>::calcIntegralUTau
     return calcIntegralUTau
     (
         magGradU, this->maxIter_, err, patchi, adjacentCellIDs, oppFaceIDs, 
-        secAdjacentCellIDs, field
+        secAdjacentCellIDs, U_face, field
     );
 }
 
@@ -351,66 +356,66 @@ tmp<scalarField> wmSpalartAllmaras<BasicTurbulenceModel>::calcIntegralUTau
     const labelList& adjacentCellIDs,
     labelList oppFaceIDs, 
     labelList secAdjacentCellIDs,
+    const surfaceVectorField U_face,
     string field
 )
 {
     // Employ a variable kappa in order to use scalar instead of dimensionedScalar
     const scalar kappa = this->kappa_.value();
 
-    // Initialization of variables
-    scalarField y = this->y_.boundaryField()[patchi];
-    scalarField nut_wf(this->nut_.boundaryField()[patchi].size());
-    
-    // Initialization of variables for the bottomWall patch
-    // Use the velocity information of the first cell center normal to the wall
-    vectorField Uw = this->U_.boundaryField()[patchi];
+    // Initialize a variable nut_wf (wall and face)
+    scalarField nut_wf(this->nut_.boundaryField()[patchi].size());    
+
+    // Distance between the first cell center normal to the wall and the wall
+    scalarField dist_wall = mag(this->mesh_.Cf().boundaryField()[patchi]);
     forAll (adjacentCellIDs, faceI)
     {
-        Uw[faceI] = this->U_.internalField()[adjacentCellIDs[faceI]];
+        dist_wall[faceI] = mag(this->mesh_.Cf()[adjacentCellIDs[faceI]] 
+                        - this->mesh_.Cf().boundaryField()[patchi][faceI]);
     }
-    scalarField magUp(mag(this->U_.boundaryField()[patchi] - Uw));    
-    scalarField nu_wf = this->nu(patchi);
+
+    // Distance between the first cell face opposite to the wall and the wall
+    scalarField dist_fface = mag(this->mesh_.Cf().boundaryField()[patchi]);
+    forAll (oppFaceIDs, faceI)
+    {
+        dist_fface[faceI] = mag(this->mesh_.Cf()[oppFaceIDs[faceI]] 
+                        - this->mesh_.Cf().boundaryField()[patchi][faceI]);
+    }
+    
+    // Initialization of variables for the wall patch
+    // Save the first cell center height as a default value (for the wall patch)
+    scalarField dist = dist_wall;    
+    
+    // Use the velocity information of the first cell center normal to the wall
+    vectorField Uc = this->U_.boundaryField()[patchi];
+    forAll (adjacentCellIDs, faceI)
+    {
+        Uc[faceI] = this->U_.internalField()[adjacentCellIDs[faceI]];
+    }
+    scalarField magUp(mag(this->U_.boundaryField()[patchi] - Uc));
+    scalarField nu_wf = this->nu(patchi);    
 
     if (field == "Wall")
-    {
-        // Use the height information of the first cell center normal to the wall        
-        forAll (adjacentCellIDs, faceI)
-        {
-            y[faceI] = this->y_[adjacentCellIDs[faceI]];
-        }        
-        
-        // magUp and nu are already defined above
+    {        
+        // magUp, dist and nu_wf are already defined above
     
         // nut at the wall
         nut_wf = this->nut_.boundaryField()[patchi];
     }
 
     else if (field == "Face")
-    {
-        // Use the height information of the first cell center and the second cell center
-        // (Use cell center values to interpolate the first cell face value linearly)
-        // It assumes that the half of the length is from the first cell face to the second cell center
-        forAll (adjacentCellIDs, faceI)
-        {
-            y[faceI] = (this->y_.internalField()[secAdjacentCellIDs[faceI]]
-                    + this->y_.internalField()[adjacentCellIDs[faceI]])/2;
-        }        
+    {        
+        dist = dist_fface;
         
-        // Use the velocity information between the first cell center and the second cell center
-        // (Use cell center values)
-        // It assumes that the half of the length is from the first cell face to the second cell center
-        vectorField diffUf = this->U_.boundaryField()[patchi];
+        // Use the velocity information of the first cell face opposite to the wall
+        vectorField Uf = this->U_.boundaryField()[patchi];
         forAll (oppFaceIDs, faceI)
         {            
-            diffUf[faceI] = (this->U_.internalField()[secAdjacentCellIDs[faceI]] 
-                            - this->U_.internalField()[adjacentCellIDs[faceI]])/2;
-            // To avoid zero denominator in x and y-direction
-            diffUf[faceI][0] += ROOTVSMALL;
-            diffUf[faceI][1] += ROOTVSMALL;            
+            Uf[faceI] = U_face[oppFaceIDs[faceI]] - this->U_.boundaryField()[patchi][faceI];
         }        
 
         // magUp is newly determined for the first cell face opposite to the wall
-        magUp = mag(diffUf);
+        magUp = mag(Uf);
     
         // nu at the first cell face opposite to the wall
         const volScalarField& tnu = this->nu();
@@ -420,7 +425,10 @@ tmp<scalarField> wmSpalartAllmaras<BasicTurbulenceModel>::calcIntegralUTau
         }        
 
         // nut at the first cell face opposite to the wall
-        nut_wf = this->nut_[oppFaceIDs[patchi]];
+        forAll (oppFaceIDs, faceI)
+        {
+            nut_wf[faceI] = this->nut_face[oppFaceIDs[faceI]];
+        }
     }
 
     tmp<scalarField> tuTau(new scalarField(this->mesh_.Cf().boundaryField()[patchi].patch().size(), Zero));
@@ -444,10 +452,10 @@ tmp<scalarField> wmSpalartAllmaras<BasicTurbulenceModel>::calcIntegralUTau
         // Find the solution of the eqution "u_avg[facei] = magUp[facei]"
         scalar diff = 10.0;
         
-        if (y[facei]*2 < 5e-4) // Newton's method        
+        if (dist[facei]*2 < 5e-4) // Newton's method
         {
-            scalar diff_old1 = average_velocity(y[facei]*2, ut_old1, nu_wf[facei], "NEWTON", kappa, num_points) - magUp[facei];
-            scalar diff_old2 = average_velocity(y[facei]*2, ut_old2, nu_wf[facei], "NEWTON", kappa, num_points) - magUp[facei];
+            scalar diff_old1 = average_velocity(dist[facei]*2, ut_old1, nu_wf[facei], "NEWTON", kappa, num_points) - magUp[facei];
+            scalar diff_old2 = average_velocity(dist[facei]*2, ut_old2, nu_wf[facei], "NEWTON", kappa, num_points) - magUp[facei];
             if (ROOTVSMALL < ut)
             {
                 int iter = 0;
@@ -457,7 +465,7 @@ tmp<scalarField> wmSpalartAllmaras<BasicTurbulenceModel>::calcIntegralUTau
                     // By Secant method, we are able to find u_tau without using Spalding's function.
                     // This method needs two previous status.
                     ut = ut_old1 - diff_old1*(ut_old1 - ut_old2)/(diff_old1 - diff_old2 + ROOTVSMALL);
-                    diff = average_velocity(y[facei]*2, ut, nu_wf[facei], "NEWTON", kappa, num_points) - magUp[facei];
+                    diff = average_velocity(dist[facei]*2, ut, nu_wf[facei], "NEWTON", kappa, num_points) - magUp[facei];
 
                     err[facei] = abs(diff)/magUp[facei];
 
@@ -479,8 +487,8 @@ tmp<scalarField> wmSpalartAllmaras<BasicTurbulenceModel>::calcIntegralUTau
 
         else // Bisection method
         {
-            scalar diff_old1 = average_velocity(y[facei]*2, ut_old1, nu_wf[facei], "BISECTION", kappa, num_points) - magUp[facei];
-            scalar diff_old2 = average_velocity(y[facei]*2, ut_old2, nu_wf[facei], "BISECTION", kappa, num_points) - magUp[facei];
+            scalar diff_old1 = average_velocity(dist[facei]*2, ut_old1, nu_wf[facei], "BISECTION", kappa, num_points) - magUp[facei];
+            scalar diff_old2 = average_velocity(dist[facei]*2, ut_old2, nu_wf[facei], "BISECTION", kappa, num_points) - magUp[facei];
             if (ROOTVSMALL < ut)
             {
                 int iter = 0;
@@ -490,7 +498,7 @@ tmp<scalarField> wmSpalartAllmaras<BasicTurbulenceModel>::calcIntegralUTau
                     // By Secant method, we are able to find u_tau without using Spalding's function.
                     // This method needs two previous status.
                     ut = ut_old1 - diff_old1*(ut_old1 - ut_old2)/(diff_old1 - diff_old2 + ROOTVSMALL);
-                    diff = average_velocity(y[facei]*2, ut, nu_wf[facei], "BISECTION", kappa, num_points) - magUp[facei];
+                    diff = average_velocity(dist[facei]*2, ut, nu_wf[facei], "BISECTION", kappa, num_points) - magUp[facei];
 
                     err[facei] = abs(diff)/magUp[facei];
 
@@ -527,7 +535,7 @@ scalar wmSpalartAllmaras<BasicTurbulenceModel>::spaldings_law
 template<class BasicTurbulenceModel>
 scalar wmSpalartAllmaras<BasicTurbulenceModel>::spalding_velocity
 (
-    const scalar y_facei,
+    const scalar dist_facei,
     scalar ut,
     const scalar nuwf_facei,
     string method,
@@ -542,7 +550,7 @@ scalar wmSpalartAllmaras<BasicTurbulenceModel>::spalding_velocity
     {
         do
         {            
-            scalar f = spaldings_law(magUp_facei/ut, kappa) - y_facei*ut/nuwf_facei;            
+            scalar f = spaldings_law(magUp_facei/ut, kappa) - dist_facei*ut/nuwf_facei;            
             // Derivative of f with respect to magUp_facei
             scalar df = 1/ut + 1/E_*(kappa/ut*exp(kappa*magUp_facei/ut) - kappa/ut - (kappa*kappa/(ut*ut))*magUp_facei - 1/2*(kappa*kappa*kappa/(ut*ut*ut))*(magUp_facei*magUp_facei));
 
@@ -563,8 +571,8 @@ scalar wmSpalartAllmaras<BasicTurbulenceModel>::spalding_velocity
         {
             magUp_facei = 0.5 * (u_upper + u_lower);
             
-            scalar f_upper = spaldings_law(u_upper/ut, kappa) - y_facei*ut/nuwf_facei;
-            scalar f_center = spaldings_law(magUp_facei/ut, kappa) - y_facei*ut/nuwf_facei;
+            scalar f_upper = spaldings_law(u_upper/ut, kappa) - dist_facei*ut/nuwf_facei;
+            scalar f_center = spaldings_law(magUp_facei/ut, kappa) - dist_facei*ut/nuwf_facei;
             
             if (f_center * f_upper > 0.0)
             {
@@ -585,7 +593,7 @@ scalar wmSpalartAllmaras<BasicTurbulenceModel>::spalding_velocity
 template<class BasicTurbulenceModel>
 scalar wmSpalartAllmaras<BasicTurbulenceModel>::average_velocity
 (
-    const scalar yf_facei,
+    const scalar distf_facei,
     scalar ut,
     const scalar nuwf_facei,
     string method,
@@ -601,7 +609,7 @@ scalar wmSpalartAllmaras<BasicTurbulenceModel>::average_velocity
         for (int i = 0; i < num_points; i++)
         {
             // Use Trapezoidal Method for numerical integration
-            trap_sum += spalding_velocity((yf_facei/num_points)*i, ut, nuwf_facei, "NEWTON", kappa) + spalding_velocity((yf_facei/num_points)*(i+1), ut, nuwf_facei, "NEWTON", kappa);
+            trap_sum += spalding_velocity((distf_facei/num_points)*i, ut, nuwf_facei, "NEWTON", kappa) + spalding_velocity((distf_facei/num_points)*(i+1), ut, nuwf_facei, "NEWTON", kappa);
         }
         // LHS and RHS are already divided by the cell height.
         u_avg_facei = trap_sum*0.5*(1/num_points);
@@ -612,7 +620,7 @@ scalar wmSpalartAllmaras<BasicTurbulenceModel>::average_velocity
         for (int i = 0; i < num_points; i++)
         {
             // Use Trapezoidal Method for numerical integration
-            trap_sum += spalding_velocity((yf_facei/num_points)*i, ut, nuwf_facei, "BISECTION", kappa) + spalding_velocity((yf_facei/num_points)*(i+1), ut, nuwf_facei, "BISECTION", kappa);
+            trap_sum += spalding_velocity((distf_facei/num_points)*i, ut, nuwf_facei, "BISECTION", kappa) + spalding_velocity((distf_facei/num_points)*(i+1), ut, nuwf_facei, "BISECTION", kappa);
         }
         // LHS and RHS are already divided by the cell height.
         u_avg_facei = trap_sum*0.5*(1/num_points);
