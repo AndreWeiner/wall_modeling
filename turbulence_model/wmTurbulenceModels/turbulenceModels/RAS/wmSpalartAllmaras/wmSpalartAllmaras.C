@@ -271,10 +271,11 @@ void wmSpalartAllmaras<BasicTurbulenceModel>::calcNut
     scalarField tmp_magGradUf(mag(U_sngrad.boundaryField()[patchi]));    
     forAll (oppFaceIDs, faceI)
     {
-        // In order to avoid zero denominator for the first time step
+        // Set an arbitrary value in order to avoid zero denominator at the variable tnuf and 
+        // overflow of the exponential term in the function spaldings_law for the first time step
         if (mag(U_sngrad.internalField()[oppFaceIDs[faceI]]) == 0)
         {
-            tmp_magGradUf[faceI] = 1;
+            tmp_magGradUf[faceI] = 1e5;
         }        
         else
         {
