@@ -1,8 +1,8 @@
 // Required geometrical information
-label surfaceID(-1);
+label surfaceID(0);
 forAll (mesh.boundary(), patchI)
 {
-    if (mesh.boundary()[patchI].name() == "bubble")
+    if (mesh.boundary()[patchI].name() == "bottomWall")
     {
         surfaceID = patchI;
     }
