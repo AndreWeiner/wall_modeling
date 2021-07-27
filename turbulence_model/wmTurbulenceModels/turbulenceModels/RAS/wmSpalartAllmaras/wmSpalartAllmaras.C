@@ -216,7 +216,7 @@ void wmSpalartAllmaras<BasicTurbulenceModel>::correctNut
     // Additionally, nut at the first cell face opposite to the wall is also calculated
     calcNut
     (
-        surfaceID, adjacentCellIDs, oppFaceIDs, secAdjacentCellIDs,
+        surfaceID, adjacentCellIDs, oppFaceIDs, secAdjacentCellIDs, secOppFaceIDs,
         U_face, U_sngrad
     );    
     /*----------------------------------------------------------------*/
@@ -234,7 +234,8 @@ void wmSpalartAllmaras<BasicTurbulenceModel>::calcNut
     label patchi, 
     const labelList& adjacentCellIDs, 
     labelList oppFaceIDs, 
-    labelList secAdjacentCellIDs,    
+    labelList secAdjacentCellIDs,
+    labelList secOppFaceIDs,
     const surfaceVectorField U_face,
     const surfaceVectorField U_sngrad
 )
@@ -313,10 +314,20 @@ void wmSpalartAllmaras<BasicTurbulenceModel>::calcNut
         )
     );
 
+    // After updating the wall value for every time step, nut_face is interpolated from nut_
+    this->nut_face = fvc::interpolate(this->nut_);
+
     // Save tnutf value to the first cell face opposite to the wall
     scalarField tnut = tnutf;
-    forAll (oppFaceIDs, faceI)
+    forAll (adjacentCellIDs, faceI)
     {
+        // Average nut_ between the wall and the first cell face
+        this->nut_[adjacentCellIDs[faceI]]
+        = (nut_wall[faceI] + tnut[faceI])/2;
+        // Average nut_ between the first cell face and the second cell face
+        this->nut_[secAdjacentCellIDs[faceI]]
+        = (tnut[faceI] + this->nut_face[secOppFaceIDs[faceI]])/2;
+        // Save nut_ at the first cell face for later use
         this->nut_face[oppFaceIDs[faceI]] = tnut[faceI];
     }    
 }

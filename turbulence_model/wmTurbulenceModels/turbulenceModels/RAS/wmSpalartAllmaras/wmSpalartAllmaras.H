@@ -166,7 +166,8 @@ protected:
             label patchi, 
             const labelList& adjacentCellIDs,
             labelList oppFaceIDs, 
-            labelList secAdjacentCellIDs,                        
+            labelList secAdjacentCellIDs,
+            labelList secOppFaceIDs,
             const surfaceVectorField U_face,
             const surfaceVectorField U_sngrad
         );
