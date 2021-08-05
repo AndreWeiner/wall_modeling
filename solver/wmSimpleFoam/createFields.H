@@ -26,6 +26,28 @@ volVectorField U
     mesh
 );
 
+// Read transportProperties
+Info << "Reading transportProperties\n" << endl;
+IOdictionary transportProperties
+(
+	IOobject
+	(
+		"transportProperties",
+		runTime.constant(),
+		mesh,
+		IOobject::MUST_READ_IF_MODIFIED,
+		IOobject::NO_WRITE
+	)
+);
+
+// Read the constant nu
+dimensionedScalar nu
+(
+	"nu",
+	dimViscosity,
+	transportProperties.lookup("nu")
+);
+
 #include "createPhi.H"
 
 

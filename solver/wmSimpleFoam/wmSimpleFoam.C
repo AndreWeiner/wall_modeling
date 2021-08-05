@@ -69,6 +69,8 @@ Description
 #include "simpleControl.H"
 #include "fvOptions.H"
 
+#include "wmFunctions.H"
+
 // * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * * //
 
 int main(int argc, char *argv[])
