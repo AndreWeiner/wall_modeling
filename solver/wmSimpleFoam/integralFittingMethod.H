@@ -147,7 +147,7 @@ forAll (patchFaceIDs, faceI)
 scalarField& nuEff_wall = nuEff.boundaryFieldRef()[surfaceID];
 forAll (patchFaceIDs, faceI)
 {
-    nuEff_wall[faceI] = max(nu_, nu_*abs(dUdy_w_spalding[faceI])/(magGradU[faceI] + ROOTVSMALL));
+    nuEff_wall[faceI] = nu_*abs(dUdy_w_spalding[faceI])/(magGradU[faceI] + ROOTVSMALL);
 }
 
 
@@ -284,7 +284,7 @@ forAll (patchFaceIDs, faceI)
 // Correction of nuEff at the first cell face opposite to the wall
 forAll (patchFaceIDs, faceI)
 {
-    nuEff[oppFaceIDs[faceI]] = max(nu_, nu_*abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL));
+    nuEff[oppFaceIDs[faceI]] = nu_*abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL);
 }
 
 
