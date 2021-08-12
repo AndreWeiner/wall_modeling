@@ -4,6 +4,7 @@ const scalar nu_ = nu.value();
 // Interpolate face values for cell center velocities
 surfaceVectorField U_face = fvc::interpolate(U);
 surfaceVectorField U_sngrad = fvc::snGrad(U);
+surfaceScalarField p_face = fvc::interpolate(p);
 
 //***********************************************************************/
 // Wall Correction
@@ -311,19 +312,34 @@ Info << "nuEff wall = " << nuEff.boundaryField()[surfaceID][200] << nl
 const vectorField Cf(mesh.Cf().boundaryField()[surfaceID]);
 // write surface data to file
 //OFstream outputFile(runTime.path()/runTime.timeName()/"surfaceFields.csv");
-OFstream outputFile("surfaceFields.csv");
+
+string filename1 = getenv("yp");
+string filename2 = "yp_surfaceFields_iter_";
+string filename3 = std::to_string(count);
+string filename4 = ".csv";
+filename1 += filename2 + filename3 + filename4;
+string path1 = "yplus_";
+string path2 = getenv("yp");
+path1 += path2;
+
+OFstream outputFile(path1/filename1);
 outputFile.precision(12);
-outputFile << "ccx,tauw,nuEff_wall,magGradU,uTau_w,nuEff_face,magGradUf,uTau_f";
+outputFile << "ccx,nuEff_wall,nuEff_1st_face,magGradU_wall,magGradU_face,uTau_wall,uTau_face,U_1st_cell,U_1st_face,p_1st_cell,p_1st_face";
 
 forAll(patchFaceIDs, faceI)
 {
     outputFile << "\n";        
-    outputFile << Cf[faceI].x() << ", "
-                << (uTau[faceI]*uTau[faceI]) << ", "
+    outputFile << Cf[faceI].x() << ", "                
                 << nuEff.boundaryField()[surfaceID][faceI] << ", "
-                << magGradU[faceI] << ", "
-                << uTau[faceI] << ", "
                 << nuEff[oppFaceIDs[faceI]] << ", "
+                << magGradU[faceI] << ", "
                 << magGradUf[faceI] << ", "
-                << uTauf[faceI];
+                << uTau[faceI] << ", "
+                << uTauf[faceI] << ", "
+                << U[adjacentCellIDs[faceI]] << ", "
+                << U_face[oppFaceIDs[faceI]] << ", "
+                << p[adjacentCellIDs[faceI]] << ", "
+                << p_face[oppFaceIDs[faceI]];
 }
+
+count++;

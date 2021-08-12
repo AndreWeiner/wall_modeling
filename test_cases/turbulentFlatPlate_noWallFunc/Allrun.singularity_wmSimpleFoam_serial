@@ -1,0 +1,138 @@
+#!/bin/bash
+cd "${0%/*}" || exit     # Run from this directory
+. ../../functions        # Singularity run functions
+
+cd wmSimpleFoam
+singularity exec "../../../of_v2012.sif" bash -c "source $bashrc && wmake"
+cd ..
+#------------------------------------------------------------------------------
+
+# Define StartTime
+StartTime=$(date +%s)
+
+if notTest "$@"
+then    
+    # Receive the model number from "jobscript" file
+    if [ ${model_num} -eq "1" ]
+    then
+        models="
+        kOmegaSST
+        "
+    elif [ ${model_num} -eq "2" ]
+    then
+        models="
+        SpalartAllmaras
+        "
+    fi
+
+    declare -A grading_vs_yp
+    #level 5 gradings
+    grading_vs_yp[0.05]=50000
+    grading_vs_yp[1]=2200
+    grading_vs_yp[2]=950
+    grading_vs_yp[5]=300
+    grading_vs_yp[10]=130
+    grading_vs_yp[30]=30
+    grading_vs_yp[50]=15
+    grading_vs_yp[100]=5
+
+    # level 3 gradings
+    #grading_vs_yp[1]=9300
+    #grading_vs_yp[2]=4300
+    #grading_vs_yp[5]=1500
+    #grading_vs_yp[10]=650
+    #grading_vs_yp[30]=175
+    #grading_vs_yp[50]=90
+    #grading_vs_yp[100]=35
+
+    # Declare res_value array
+    declare -A res_value
+    #res_value[1e-3]=1e-3
+    #res_value[1e-4]=1e-4
+    res_value[1e-5]=1e-5
+    #res_value[1e-6]=1e-6
+
+    \cp constant/turbulenceProperties.orig constant/turbulenceProperties
+
+    for model in $models
+    do
+        echo "Processing model: $model"
+
+        # For each OpenFOAM command such as foamDictionary, the singularity image is loaded.
+        singularity exec $image bash -c "source $bashrc && foamDictionary -entry RAS.RASModel -set "$model" \
+            constant/turbulenceProperties > /dev/null"
+
+        for i in "${!grading_vs_yp[@]}"
+        do
+            yp=$i
+            grading=${grading_vs_yp[$yp]}
+            export yp
+
+            # Make directory for file separation
+            mkdir yplus_${yp}
+
+            echo "Mesh: y+ $yp"
+
+            \rm -rf 0 [1-9]*
+            \cp -rf 0.${model} 0
+
+            sed "s/GRADING/$grading/g" system/blockMeshDict.template > system/blockMeshDict
+            # Add additional loop for each residual limit value
+            for j in "${!res_value[@]}"
+            do
+                # Add variable for residual limit value
+                res=$j
+                echo "Residual control: $res"
+                # SIMPLE residual control
+                sed "s/RESIDUAL/$res/g" system/fvSolution.template > system/fvSolution
+                
+                singularityRun -s ${model}_${yp}_${res} blockMesh
+                
+                # Run simpleFoam solver
+                singularityRun -s ${model}_${yp}_${res} wmSimpleFoam
+            
+                # Change solverInfo.dat to solverInfo.csv
+                sed 's/#//g' postProcessing/solverInfo/0/solverInfo.dat > postProcessing/solverInfo/0/solverInfo.csv
+                cp postProcessing/solverInfo/0/solverInfo.csv yplus_${yp}/solverInfo_${model}_${yp}_${res}.csv
+                # Change folder name to preserve each case data
+                mv postProcessing postProcessing-${model}_${yp}_${res}                
+
+                UInf=$(singularity exec $image bash -c "source $bashrc && foamDictionary -entry internalField 0/U | sed 's/^.*(\s*\([^ ]*\).*/\1/g'")
+                nuInf=$(singularity exec $image bash -c "source $bashrc && foamDictionary -entry nu constant/transportProperties | sed 's/^.*\s\(.*\);/\1/g'")
+
+                timeDir=$(singularity exec $image bash -c "source $bashrc && foamListTimes -latestTime")
+                
+                echo "UInf = $UInf"
+
+                # Echo only once to avoid overwrite and delete '#' in front of ccx
+                echo "ccx tau_xx tau_yy tau_zz" > yplus_${yp}/tauw_${model}_${yp}_${res}.csv
+                echo "ccx y+" > yplus_${yp}/yplus_${model}_${yp}_${res}.csv                          
+
+                singularity exec $image bash -c "source $bashrc && foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/Cx | \
+                        sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > Cx.$$"
+                singularity exec $image bash -c "source $bashrc && foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/wallShearStress | \
+                        sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > tau.$$"
+                singularity exec $image bash -c "source $bashrc && foamDictionary -entry boundaryField.bottomWall.value -value $timeDir/yPlus | \
+                        sed -n '/(/,/)/p' | sed -e 's/[()]//g;/^\s*$/d' > yp.$$"
+            
+                # Save to csv file instead of dat file
+                paste -d ' ' Cx.$$ tau.$$ >> yplus_${yp}/tauw_${model}_${yp}_${res}.csv                
+                paste -d ' ' Cx.$$ yp.$$ >> yplus_${yp}/yplus_${model}_${yp}_${res}.csv
+                \rm -f Cx.$$ tau.$$ yp.$$                
+            done
+            
+            # Using GNU Plot
+            #./plot $UInf $nuInf $model $yp
+
+            # Optionally store the results
+            #mv $timeDir ${model}_${yp}.${timeDir}
+        done
+        # The name of this folder already changed, and thus it is not needed.
+        #mv postProcessing postProcessing-${model}
+    done
+fi
+
+# Define EndTime and print elapsed time for the task
+EndTime=$(date +%s)
+echo "Total Elapsed Time : $(($EndTime - $StartTime)) seconds"
+# -----------------------------------------------------------------------------

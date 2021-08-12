@@ -98,6 +98,9 @@ int main(int argc, char *argv[])
 
     Info<< "\nStarting time loop\n" << endl;
 
+    // The number of iterations
+    int count = 1;
+
     while (simple.loop())
     {
         Info<< "Time = " << runTime.timeName() << nl << endl;
