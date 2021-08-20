@@ -192,11 +192,10 @@ forAll (patchFaceIDs, faceI)
 // Correction of nuEff at the first cell face opposite to the wall
 forAll (patchFaceIDs, faceI)
 {
-    //1. nuEff[oppFaceIDs[faceI]] = nu_*abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL);
-    //2. nuEff[oppFaceIDs[faceI]] = min(nu_*abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL), 100*nu_);    
-    scalar yPlusFace = dist_fface[faceI]*uTau[faceI]/nu_;
-    scalar w = 1/(1 + Foam::exp(-0.05*(200 - yPlusFace))); // Sigmoid function    
-    nuEff[oppFaceIDs[faceI]] = (1 - w)*nu_ + w*(nu_*abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL));
+    //scalar yPlusFace = dist_fface[faceI]*uTau[faceI]/nu_;
+    //scalar w = 1/(1 + Foam::exp(-0.05*(200 - yPlusFace))); // Sigmoid function    
+    //nuEff[oppFaceIDs[faceI]] = (1 - w)*nu_ + w*(nu_*abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL));
+    nuEff[oppFaceIDs[faceI]] = max(nu_*min(abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL), 50), nuEff[oppFaceIDs[faceI]]);
 }
 
 
