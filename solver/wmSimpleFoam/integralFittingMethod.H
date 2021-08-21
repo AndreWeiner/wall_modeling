@@ -141,7 +141,7 @@ forAll(uTau, faceI)
 }
 
 // A small distance eps
-scalar eps = dist_fface[0]/1000.0;
+scalar eps = dist_fface[0]/100.0;
 
 // Calculate dU/dy at the wall
 scalarField dUdy_w_spalding(nuEff.boundaryField()[surfaceID].size());
@@ -155,7 +155,7 @@ forAll (patchFaceIDs, faceI)
 scalarField& nuEff_wall = nuEff.boundaryFieldRef()[surfaceID];
 forAll (patchFaceIDs, faceI)
 {
-    nuEff_wall[faceI] = nu_*abs(dUdy_w_spalding[faceI])/(magGradU[faceI] + ROOTVSMALL);
+    nuEff_wall[faceI] = nu_*(-dUdy_w_spalding[faceI])/(magGradU[faceI] + ROOTVSMALL);
 }
 
 
@@ -185,8 +185,25 @@ const scalarField magGradUf(tmp_magGradUf);
 scalarField dUdy_f_spalding(nuEff.boundaryField()[surfaceID].size());
 forAll (patchFaceIDs, faceI)
 {
-    dUdy_f_spalding[faceI] = (spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "NEWTON", kappa)
-    - spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "NEWTON", kappa))/(2*eps);
+    if (dist_fface[faceI] < 5e-4)
+    {
+        dUdy_f_spalding[faceI] = (spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "NEWTON", kappa)
+        - spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "NEWTON", kappa))/(2*eps);
+        // To compare the velocity between -eps and +eps
+        //Info << "spalding vel - eps diff " << faceI << " = " << spalding_velocity(dist_fface[faceI], uTau[faceI], nu_, "NEWTON", kappa) - spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "NEWTON", kappa) << nl
+        //<< "spalding vel + eps diff " << faceI << " = " << spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "NEWTON", kappa) - spalding_velocity(dist_fface[faceI], uTau[faceI], nu_, "NEWTON", kappa) << endl;
+    }
+
+    else
+    {
+        dUdy_f_spalding[faceI] = (spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "BISECTION", kappa)
+        - spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "BISECTION", kappa))/(2*eps);
+        // To compare the velocity between -eps and +eps
+        //Info << "spalding vel - eps diff " << faceI << " = " << spalding_velocity(dist_fface[faceI], uTau[faceI], nu_, "BISECTION", kappa) - spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "BISECTION", kappa) << nl
+        //<< "spalding vel + eps diff " << faceI << " = " << spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "BISECTION", kappa) - spalding_velocity(dist_fface[faceI], uTau[faceI], nu_, "BISECTION", kappa) << endl;
+    }
+    
+    
 }
 
 // Correction of nuEff at the first cell face opposite to the wall
@@ -195,7 +212,7 @@ forAll (patchFaceIDs, faceI)
     //scalar yPlusFace = dist_fface[faceI]*uTau[faceI]/nu_;
     //scalar w = 1/(1 + Foam::exp(-0.05*(200 - yPlusFace))); // Sigmoid function    
     //nuEff[oppFaceIDs[faceI]] = (1 - w)*nu_ + w*(nu_*abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL));
-    nuEff[oppFaceIDs[faceI]] = max(nu_*min(abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL), 50), nuEff[oppFaceIDs[faceI]]);
+    nuEff[oppFaceIDs[faceI]] = max(nu_*min((-dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL), 50), nuEff[oppFaceIDs[faceI]]);
 }
 
 
