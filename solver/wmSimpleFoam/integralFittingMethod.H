@@ -201,18 +201,20 @@ forAll (patchFaceIDs, faceI)
         // To compare the velocity between -eps and +eps
         //Info << "spalding vel - eps diff " << faceI << " = " << spalding_velocity(dist_fface[faceI], uTau[faceI], nu_, "BISECTION", kappa) - spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "BISECTION", kappa) << nl
         //<< "spalding vel + eps diff " << faceI << " = " << spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "BISECTION", kappa) - spalding_velocity(dist_fface[faceI], uTau[faceI], nu_, "BISECTION", kappa) << endl;
-    }
-    
-    
+    }    
 }
 
 // Correction of nuEff at the first cell face opposite to the wall
+scalarField yPlusFace(nuEff.boundaryField()[surfaceID].size());
+scalarField w(nuEff.boundaryField()[surfaceID].size());
 forAll (patchFaceIDs, faceI)
 {
-    //scalar yPlusFace = dist_fface[faceI]*uTau[faceI]/nu_;
-    //scalar w = 1/(1 + Foam::exp(-0.05*(200 - yPlusFace))); // Sigmoid function    
-    //nuEff[oppFaceIDs[faceI]] = (1 - w)*nu_ + w*(nu_*abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL));
-    nuEff[oppFaceIDs[faceI]] = max(nu_*min((-dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL), 50), nuEff[oppFaceIDs[faceI]]);
+    // Option 1
+    //nuEff[oppFaceIDs[faceI]] = max(nu_*(-dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL), nuEff[oppFaceIDs[faceI]]);
+    // Option 2
+    yPlusFace[faceI] = dist_fface[faceI]*uTau[faceI]/nu_;
+    w[faceI] = 1/(1 + Foam::exp(-0.05*(200 - yPlusFace[faceI]))); // Sigmoid function    
+    nuEff[oppFaceIDs[faceI]] = w[faceI]*nuEff[oppFaceIDs[faceI]] + (1 - w[faceI]) * nu_*(-dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL);
 }
 
 
@@ -220,17 +222,19 @@ forAll (patchFaceIDs, faceI)
 const vectorField Cf(mesh.Cf().boundaryField()[surfaceID]);
 
 string filename1 = getenv("yp");
-string filename2 = "yp_surfaceFields_iter_";
-string filename3 = std::to_string(count);
+string filename2 = "yp_surfaceFields";
+//string filename2 = "yp_surfaceFields_iter_";
+//string filename3 = std::to_string(count);
 string filename4 = ".csv";
-filename1 += filename2 + filename3 + filename4;
+//filename1 += filename2 + filename3 + filename4;
+filename1 += filename2 + filename4;
 string path1 = "yplus_";
 string path2 = getenv("yp");
 path1 += path2;
 
 OFstream outputFile(path1/filename1);
 outputFile.precision(12);
-outputFile << "ccx,nuEff_wall_norm,nuEff_face_norm,nuEff_wall,nuEff_1st_face,dUdy_sp_wall,dUdy_sp_face,uTau,Conv_uTau,magGradU_wall,magGradU_face,Ux_1st_cell,Uy_1st_cell,Ux_1st_face,Uy_1st_face,p_1st_cell,p_1st_face";
+outputFile << "ccx,nuEff_wall_norm,nuEff_face_norm,nuEff_wall,nuEff_1st_face,dUdy_sp_wall,dUdy_sp_face,w,yPlusFace,nut_face,uTau,Conv_uTau,magGradU_wall,magGradU_face,Ux_1st_cell,Uy_1st_cell,Ux_1st_face,Uy_1st_face,p_1st_cell,p_1st_face";
 
 forAll(patchFaceIDs, faceI)
 {
@@ -242,6 +246,9 @@ forAll(patchFaceIDs, faceI)
                 << nuEff[oppFaceIDs[faceI]] << ", "
                 << dUdy_w_spalding[faceI] << ", "
                 << dUdy_f_spalding[faceI] << ", "
+                << w[faceI] << ", "
+                << yPlusFace[faceI] << ", "
+                << nuEff[oppFaceIDs[faceI]] - nu_ << ", "
                 << uTau[faceI] << ", "
                 << conv_uTau[faceI] << ", "
                 << magGradU[faceI] << ", "
