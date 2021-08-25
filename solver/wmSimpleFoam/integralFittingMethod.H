@@ -189,18 +189,12 @@ forAll (patchFaceIDs, faceI)
     {
         dUdy_f_spalding[faceI] = (spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "NEWTON", kappa)
         - spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "NEWTON", kappa))/(2*eps);
-        // To compare the velocity between -eps and +eps
-        //Info << "spalding vel - eps diff " << faceI << " = " << spalding_velocity(dist_fface[faceI], uTau[faceI], nu_, "NEWTON", kappa) - spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "NEWTON", kappa) << nl
-        //<< "spalding vel + eps diff " << faceI << " = " << spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "NEWTON", kappa) - spalding_velocity(dist_fface[faceI], uTau[faceI], nu_, "NEWTON", kappa) << endl;
     }
 
     else
     {
         dUdy_f_spalding[faceI] = (spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "BISECTION", kappa)
         - spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "BISECTION", kappa))/(2*eps);
-        // To compare the velocity between -eps and +eps
-        //Info << "spalding vel - eps diff " << faceI << " = " << spalding_velocity(dist_fface[faceI], uTau[faceI], nu_, "BISECTION", kappa) - spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "BISECTION", kappa) << nl
-        //<< "spalding vel + eps diff " << faceI << " = " << spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "BISECTION", kappa) - spalding_velocity(dist_fface[faceI], uTau[faceI], nu_, "BISECTION", kappa) << endl;
     }    
 }
 
@@ -208,13 +202,11 @@ forAll (patchFaceIDs, faceI)
 scalarField yPlusFace(nuEff.boundaryField()[surfaceID].size());
 scalarField w(nuEff.boundaryField()[surfaceID].size());
 forAll (patchFaceIDs, faceI)
-{
-    // Option 1
-    //nuEff[oppFaceIDs[faceI]] = max(nu_*(-dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL), nuEff[oppFaceIDs[faceI]]);
-    // Option 2
+{    
     yPlusFace[faceI] = dist_fface[faceI]*uTau[faceI]/nu_;
-    w[faceI] = 1/(1 + Foam::exp(-0.05*(200 - yPlusFace[faceI]))); // Sigmoid function    
-    nuEff[oppFaceIDs[faceI]] = w[faceI]*nuEff[oppFaceIDs[faceI]] + (1 - w[faceI]) * nu_*(-dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL);
+
+    w[faceI] = 0.35;
+    nuEff[oppFaceIDs[faceI]] = 0.35*nuEff[oppFaceIDs[faceI]] + 0.65 * nu_*(-dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL);
 }
 
 
