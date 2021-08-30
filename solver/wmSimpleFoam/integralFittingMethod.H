@@ -1,6 +1,13 @@
 // Employ a variable nu_ in order to use scalar instead of dimensionedScalar
 const scalar nu_ = nu.value();
 
+// nuEff_face_old
+scalarField nuEff_face_old(nuEff.boundaryField()[surfaceID].size());
+forAll (oppFaceIDs, faceI)
+{
+    nuEff_face_old[faceI] = nuEff[oppFaceIDs[faceI]];
+}
+
 // Interpolate face values for cell center velocities
 surfaceVectorField U_face = fvc::interpolate(U);
 surfaceVectorField U_sngrad = fvc::snGrad(U);
@@ -52,96 +59,58 @@ forAll(uTau, faceI)
     // diff = u_avg[faceI] - magUp[faceI]
     // Find the solution of the eqution "u_avg[faceI] = magUp[faceI]"
     scalar diff = 10.0;
-        
-    if (dist_fface[faceI] < 5e-4) // Newton's method
+
+    // Newton's method
+    scalar diff_old1 = average_velocity(dist_fface[faceI], ut_old1, nu_, "NEWTON", kappa, num_points) - magUp[faceI];
+    scalar diff_old2 = average_velocity(dist_fface[faceI], ut_old2, nu_, "NEWTON", kappa, num_points) - magUp[faceI];
+    if (ROOTVSMALL < ut)
     {
-        scalar diff_old1 = average_velocity(dist_fface[faceI], ut_old1, nu_, "NEWTON", kappa, num_points) - magUp[faceI];
-        scalar diff_old2 = average_velocity(dist_fface[faceI], ut_old2, nu_, "NEWTON", kappa, num_points) - magUp[faceI];
-        if (ROOTVSMALL < ut)
+        int iter = 0;
+
+        do
         {
-            int iter = 0;
+            // By Secant method, we are able to find u_tau without using Spalding's function.
+            // This method needs two previous status.
+            ut = ut_old1 - diff_old1*(ut_old1 - ut_old2)/(diff_old1 - diff_old2 + ROOTVSMALL);
+            diff = average_velocity(dist_fface[faceI], ut, nu_, "NEWTON", kappa, num_points) - magUp[faceI];
 
-            do
-            {
-                // By Secant method, we are able to find u_tau without using Spalding's function.
-                // This method needs two previous status.
-                ut = ut_old1 - diff_old1*(ut_old1 - ut_old2)/(diff_old1 - diff_old2 + ROOTVSMALL);
-                diff = average_velocity(dist_fface[faceI], ut, nu_, "NEWTON", kappa, num_points) - magUp[faceI];
+            err[faceI] = abs(diff)/magUp[faceI];
 
-                err[faceI] = abs(diff)/magUp[faceI];
+            diff_old2 = diff_old1;
+            ut_old2 = ut_old1;
+            diff_old1 = diff;
+            ut_old1 = ut;
 
-                diff_old2 = diff_old1;
-                ut_old2 = ut_old1;
-                diff_old1 = diff;
-                ut_old1 = ut;
+        } while
+        (
+            ut > ROOTVSMALL
+        && err[faceI] > tolerance_
+        && ++iter < maxIter_
+        );
 
-            } while
-            (
-                ut > ROOTVSMALL
-            && err[faceI] > tolerance_
-            && ++iter < maxIter_
-            );
-
-            // To check convergence of calculating uTau
-            if (err[faceI] <= tolerance_)
-            {
-                conv_uTau[faceI] = 1;
-            }
-            else
-            {
-                conv_uTau[faceI] = 0;
-            }
-
-            uTau[faceI] = max(0.0, ut);
-        }        
-    }
-
-    else // Bisection method
-    {
-        scalar diff_old1 = average_velocity(dist_fface[faceI], ut_old1, nu_, "BISECTION", kappa, num_points) - magUp[faceI];
-        scalar diff_old2 = average_velocity(dist_fface[faceI], ut_old2, nu_, "BISECTION", kappa, num_points) - magUp[faceI];
-        if (ROOTVSMALL < ut)
+        // To check convergence of calculating uTau
+        if (err[faceI] <= tolerance_)
         {
-            int iter = 0;
+            conv_uTau[faceI] = 1;
+        }
+        else
+        {
+            conv_uTau[faceI] = 0;
+        }
 
-            do
-            {
-                // By Secant method, we are able to find u_tau without using Spalding's function.
-                // This method needs two previous status.
-                ut = ut_old1 - diff_old1*(ut_old1 - ut_old2)/(diff_old1 - diff_old2 + ROOTVSMALL);
-                diff = average_velocity(dist_fface[faceI], ut, nu_, "BISECTION", kappa, num_points) - magUp[faceI];
+        uTau[faceI] = max(0.0, ut);
+    }        
+}
 
-                err[faceI] = abs(diff)/magUp[faceI];
-
-                diff_old2 = diff_old1;
-                ut_old2 = ut_old1;
-                diff_old1 = diff;
-                ut_old1 = ut;
-
-            } while
-            (
-                ut > ROOTVSMALL
-            && err[faceI] > tolerance_
-            && ++iter < maxIter_
-            );
-
-            // To check convergence of calculating uTau
-            if (err[faceI] <= tolerance_)
-            {
-                conv_uTau[faceI] = 1;
-            }
-            else
-            {
-                conv_uTau[faceI] = 0;
-            }
-
-            uTau[faceI] = max(0.0, ut);
-        }        
-    }
+// yPlus at face
+scalarField yPlusFace(nuEff.boundaryField()[surfaceID].size());
+forAll (oppFaceIDs, faceI)
+{    
+    yPlusFace[faceI] = dist_fface[faceI]*uTau[faceI]/nu_;
 }
 
 // A small distance eps
-scalar eps = dist_fface[0]/100.0;
+scalar eps = dist_fface[0]/50.0;
 
 // Calculate dU/dy at the wall
 scalarField dUdy_w_spalding(nuEff.boundaryField()[surfaceID].size());
@@ -155,7 +124,7 @@ forAll (patchFaceIDs, faceI)
 scalarField& nuEff_wall = nuEff.boundaryFieldRef()[surfaceID];
 forAll (patchFaceIDs, faceI)
 {
-    nuEff_wall[faceI] = nu_*(-dUdy_w_spalding[faceI])/(magGradU[faceI] + ROOTVSMALL);
+    nuEff_wall[faceI] = nu_*abs(dUdy_w_spalding[faceI])/(magGradU[faceI] + ROOTVSMALL);
 }
 
 
@@ -185,28 +154,22 @@ const scalarField magGradUf(tmp_magGradUf);
 scalarField dUdy_f_spalding(nuEff.boundaryField()[surfaceID].size());
 forAll (patchFaceIDs, faceI)
 {
-    if (dist_fface[faceI] < 5e-4)
-    {
-        dUdy_f_spalding[faceI] = (spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "NEWTON", kappa)
-        - spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "NEWTON", kappa))/(2*eps);
-    }
-
-    else
-    {
-        dUdy_f_spalding[faceI] = (spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "BISECTION", kappa)
-        - spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "BISECTION", kappa))/(2*eps);
-    }    
+    dUdy_f_spalding[faceI] = (spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "NEWTON", kappa)
+    - spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "NEWTON", kappa))/(2*eps);
+    // To compare the velocity between -eps and +eps
+    //Info << "spalding vel - eps diff " << faceI << " = " << spalding_velocity(dist_fface[faceI], uTau[faceI], nu_, "NEWTON", kappa) - spalding_velocity(dist_fface[faceI] - eps, uTau[faceI], nu_, "NEWTON", kappa) << nl
+    //<< "spalding vel + eps diff " << faceI << " = " << spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "NEWTON", kappa) - spalding_velocity(dist_fface[faceI], uTau[faceI], nu_, "NEWTON", kappa) << nl << endl;
 }
 
 // Correction of nuEff at the first cell face opposite to the wall
-scalarField yPlusFace(nuEff.boundaryField()[surfaceID].size());
-scalarField w(nuEff.boundaryField()[surfaceID].size());
 forAll (patchFaceIDs, faceI)
 {    
-    yPlusFace[faceI] = dist_fface[faceI]*uTau[faceI]/nu_;
-
-    w[faceI] = 0.35;
-    nuEff[oppFaceIDs[faceI]] = 0.35*nuEff[oppFaceIDs[faceI]] + 0.65 * nu_*(-dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL);
+    // nut already exists at the face, whereas zero at the wall
+    if (count >= 50)
+    {
+        //nuEff[oppFaceIDs[faceI]] *= abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL);
+        nuEff[oppFaceIDs[faceI]] = 0.7*nuEff_face_old[faceI] + 0.3*nuEff[oppFaceIDs[faceI]]*abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL);
+    }
 }
 
 
@@ -226,7 +189,7 @@ path1 += path2;
 
 OFstream outputFile(path1/filename1);
 outputFile.precision(12);
-outputFile << "ccx,nuEff_wall_norm,nuEff_face_norm,nuEff_wall,nuEff_1st_face,dUdy_sp_wall,dUdy_sp_face,w,yPlusFace,nut_face,uTau,Conv_uTau,magGradU_wall,magGradU_face,Ux_1st_cell,Uy_1st_cell,Ux_1st_face,Uy_1st_face,p_1st_cell,p_1st_face";
+outputFile << "ccx,nuEff_wall_norm,nuEff_face_norm,nuEff_wall,nuEff_1st_face,dUdy_sp_wall,dUdy_sp_face,yPlusFace,nut_face,uTau,Conv_uTau,magGradU_wall,magGradU_face,Ux_1st_cell,Uy_1st_cell,Ux_1st_face,Uy_1st_face,p_1st_cell,p_1st_face";
 
 forAll(patchFaceIDs, faceI)
 {
@@ -238,7 +201,6 @@ forAll(patchFaceIDs, faceI)
                 << nuEff[oppFaceIDs[faceI]] << ", "
                 << dUdy_w_spalding[faceI] << ", "
                 << dUdy_f_spalding[faceI] << ", "
-                << w[faceI] << ", "
                 << yPlusFace[faceI] << ", "
                 << nuEff[oppFaceIDs[faceI]] - nu_ << ", "
                 << uTau[faceI] << ", "

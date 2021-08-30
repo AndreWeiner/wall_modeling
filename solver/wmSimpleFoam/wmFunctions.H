@@ -1,6 +1,6 @@
 // Hardcoded coefficients
 scalar E_ = 9.8;
-label maxIter_ = 100;
+label maxIter_ = 1000;
 scalar tolerance_ = 1e-8;
 scalar kappa = 0.41;
 
@@ -23,7 +23,7 @@ scalar spalding_velocity
     const scalar kappa
 )
 {
-    scalar magUp_facei = ut;
+    scalar magUp_facei = 100*ut;
     scalar n_iter = 0;
     scalar residual = 1.0;
 
