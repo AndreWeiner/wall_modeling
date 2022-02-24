@@ -1,9 +1,9 @@
 # functions to simplify the execution of OpenFOAM utilities and solvers with Singularity
-# most functions are copied from $WM_PROJECT_DIR/bin/tools/RunFunctions of OpenFOAM-v2012
+# most functions are copied from $WM_PROJECT_DIR/bin/tools/RunFunctions of OpenFOAM-v2106
 # with small modifications to run with Singularity
 
-image="../../of_v2012.sif"
-bashrc="/usr/lib/openfoam/openfoam2012/etc/bashrc"
+image="../../../of2106.sif"
+bashrc="/usr/lib/openfoam/openfoam2106/etc/bashrc"
 
 imageFound()
 {
