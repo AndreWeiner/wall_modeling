@@ -1,12 +1,7 @@
 // Employ a variable nu_ in order to use scalar instead of dimensionedScalar
 const scalar nu_ = nu.value();
-
-// nuEff_face_old
-scalarField nuEff_face_old(nuEff.boundaryField()[surfaceID].size());
-forAll (oppFaceIDs, faceI)
-{
-    nuEff_face_old[faceI] = nuEff[oppFaceIDs[faceI]];
-}
+// Velocity at wall
+scalarField U_wall(mag(U.boundaryField()[surfaceID]));
 
 // Interpolate face values for cell center velocities
 surfaceVectorField U_face = fvc::interpolate(U);
@@ -110,7 +105,7 @@ forAll (oppFaceIDs, faceI)
 }
 
 // A small distance eps
-scalar eps = dist_fface[0]/50.0;
+scalar eps = dist_fface[0]/100.0;
 
 // Calculate dU/dy at the wall
 scalarField dUdy_w_spalding(nuEff.boundaryField()[surfaceID].size());
@@ -120,11 +115,31 @@ forAll (patchFaceIDs, faceI)
     - spalding_velocity(eps, uTau[faceI], nu_, "NEWTON", kappa))/eps;
 }
 
-// Correction of nuEff at the wall
-scalarField& nuEff_wall = nuEff.boundaryFieldRef()[surfaceID];
+// Normalization of velocity for blending
+scalar alpha = 1.0;
+scalarField U_tilde(mesh.Cf().boundaryField()[surfaceID].patch().size());
+scalarField wall_b(mesh.Cf().boundaryField()[surfaceID].patch().size());
 forAll (patchFaceIDs, faceI)
 {
-    nuEff_wall[faceI] = nu_*abs(dUdy_w_spalding[faceI])/(magGradU[faceI] + ROOTVSMALL);
+    // Between 0 and 1
+    U_tilde[faceI] = (mag(U.internalField()[adjacentCellIDs[faceI]]) - U_wall[faceI])/(U_ref - U_wall[faceI]);
+    // Blending function for wall : If y+ is larger, more portion of the slopes of Spalding are applied to the numerator.
+    wall_b[faceI] = Foam::pow(U_tilde[faceI], alpha)*abs(dUdy_w_spalding[faceI]) + Foam::pow((1 - U_tilde[faceI]), alpha)*magGradU[faceI];
+}
+
+// Correction of nuEff at the wall
+scalarField& nuEff_wall = nuEff.boundaryFieldRef()[surfaceID];
+
+// Version 1 : blended wall correction
+forAll (patchFaceIDs, faceI)
+{
+    nuEff_wall[faceI] = nu_*wall_b[faceI]/(magGradU[faceI] + ROOTVSMALL);
+}
+
+// Version 2 : fixed wall correction
+forAll (patchFaceIDs, faceI)
+{
+    //nuEff_wall[faceI] = nu_*abs(dUdy_w_spalding[faceI])/(magGradU[faceI] + ROOTVSMALL);
 }
 
 
@@ -140,7 +155,7 @@ forAll (oppFaceIDs, faceI)
     // overflow of the exponential term in the function spaldings_law for the first time step
     if (mag(U_sngrad.internalField()[oppFaceIDs[faceI]]) == 0)
     {
-        tmp_magGradUf[faceI] = 1e5;
+        tmp_magGradUf[faceI] = 1e2;
     }        
     else
     {
@@ -161,15 +176,18 @@ forAll (patchFaceIDs, faceI)
     //<< "spalding vel + eps diff " << faceI << " = " << spalding_velocity(dist_fface[faceI] + eps, uTau[faceI], nu_, "NEWTON", kappa) - spalding_velocity(dist_fface[faceI], uTau[faceI], nu_, "NEWTON", kappa) << nl << endl;
 }
 
-// Correction of nuEff at the first cell face opposite to the wall
+scalarField face_b(mesh.Cf().boundaryField()[surfaceID].patch().size());
 forAll (patchFaceIDs, faceI)
-{    
-    // nut already exists at the face, whereas zero at the wall
-    if (count >= 50)
-    {
-        //nuEff[oppFaceIDs[faceI]] *= abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL);
-        nuEff[oppFaceIDs[faceI]] = 0.7*nuEff_face_old[faceI] + 0.3*nuEff[oppFaceIDs[faceI]]*abs(dUdy_f_spalding[faceI])/(magGradUf[faceI] + ROOTVSMALL);
-    }
+{
+    // Reversed blending function for 1st face : If y+ is smaller, more portion of the slopes of Spalding are applied to the denominator
+    // in order to avoid exceedingly small magGradUf values. (ex. U_tilde = 0 -> no face correction is applied.)
+    face_b[faceI] = Foam::pow(U_tilde[faceI], alpha)*magGradUf[faceI] + Foam::pow((1 - U_tilde[faceI]), alpha)*abs(dUdy_f_spalding[faceI]);
+}
+
+// Correction of nuEff at the first cell face opposite to the wall
+forAll (oppFaceIDs, faceI)
+{
+    nuEff[oppFaceIDs[faceI]] *= abs(dUdy_f_spalding[faceI])/(face_b[faceI] + ROOTVSMALL);
 }
 
 
@@ -177,19 +195,19 @@ forAll (patchFaceIDs, faceI)
 const vectorField Cf(mesh.Cf().boundaryField()[surfaceID]);
 
 string filename1 = getenv("yp");
-string filename2 = "yp_surfaceFields";
-//string filename2 = "yp_surfaceFields_iter_";
-//string filename3 = std::to_string(count);
+//string filename2 = "yp_surfaceFields";
+string filename2 = "yp_surfaceFields_iter_";
+string filename3 = std::to_string(count);
 string filename4 = ".csv";
-//filename1 += filename2 + filename3 + filename4;
-filename1 += filename2 + filename4;
+filename1 += filename2 + filename3 + filename4;
+//filename1 += filename2 + filename4;
 string path1 = "yplus_";
 string path2 = getenv("yp");
 path1 += path2;
 
 OFstream outputFile(path1/filename1);
 outputFile.precision(12);
-outputFile << "ccx,nuEff_wall_norm,nuEff_face_norm,nuEff_wall,nuEff_1st_face,dUdy_sp_wall,dUdy_sp_face,yPlusFace,nut_face,uTau,Conv_uTau,magGradU_wall,magGradU_face,Ux_1st_cell,Uy_1st_cell,Ux_1st_face,Uy_1st_face,p_1st_cell,p_1st_face";
+outputFile << "ccx,nuEff_wall_norm,nuEff_face_norm,nuEff_wall,nuEff_1st_face,dUdy_sp_wall,dUdy_sp_face,yPlusFace,nut_face,uTau,Conv_uTau,magGradU_wall,magGradU_face,U_tilde,wall_blending,face_blending,Ux_1st_cell,Uy_1st_cell,Ux_1st_face,Uy_1st_face,p_1st_cell,p_1st_face";
 
 forAll(patchFaceIDs, faceI)
 {
@@ -206,7 +224,10 @@ forAll(patchFaceIDs, faceI)
                 << uTau[faceI] << ", "
                 << conv_uTau[faceI] << ", "
                 << magGradU[faceI] << ", "
-                << magGradUf[faceI] << ", "                
+                << magGradUf[faceI] << ", "
+                << U_tilde[faceI] << ", "
+                << wall_b[faceI] << ", "
+                << face_b[faceI] << ", "
                 << U[adjacentCellIDs[faceI]][0] << ", "
                 << U[adjacentCellIDs[faceI]][1] << ", "
                 << U_face[oppFaceIDs[faceI]][0] << ", "
